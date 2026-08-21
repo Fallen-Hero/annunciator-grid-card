@@ -140,7 +140,6 @@ In **Presentation** mode, acknowledgement is disabled. More Info can optionally 
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Migration Guide](docs/MIGRATION.md)
 - [Validation / test status](docs/VALIDATION.md)
-- [Publishing / HACS maintainer checklist](docs/PUBLISHING.md)
 - [Changelog](CHANGELOG.md)
 
 ## v1.0.0 status
