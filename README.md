@@ -1,3 +1,5 @@
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/fallenhero)
+
 # Annunciator Grid Card
 
 [![Release](https://img.shields.io/badge/release-v1.0.0-blue)](#)
