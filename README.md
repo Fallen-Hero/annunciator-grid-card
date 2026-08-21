@@ -177,6 +177,16 @@ npm test
 
 This checks JavaScript syntax and release/static invariants. GitHub Actions additionally run the official HACS validation action.
 
+## Buymeacoffee
+
+## ☕ Support the Project
+
+If you enjoy Annunciator Grid Card and would like to support its continued development, you can buy me a coffee:
+
+[☕ Buy Me a Coffee](https://buymeacoffee.com/fallenhero)
+
+Support is completely optional. Thank you for using and supporting the project!
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
