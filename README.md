@@ -99,8 +99,6 @@ input_boolean:
 - Configure the text helper under **Panel Settings → Acknowledgement → Persistent input_text**.
 - Configure the toggle under **Panel Settings → Advanced → Lamp test entity**.
 
-The v1.0 ACK codec automatically chooses a compact dense bitset or sparse slot representation and preserves legacy ACK formats during migration.
-
 ## Quick alarm example
 
 ```yaml
