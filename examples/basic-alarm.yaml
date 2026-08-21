@@ -1,0 +1,19 @@
+type: custom:annunciator-grid-card
+config_version: 2
+panel_id: main_panel
+columns: 4
+panel_sizing: auto_fit
+ack_store:
+  type: local
+entities:
+  - entity: binary_sensor.boiler_trip
+    lamp_type: alarm
+    name_override: BOILER TRIP
+    label_source: custom
+    severity: trip
+    eval_mode: toggle
+    alert_style: blink
+    alert_when: on
+    ack_rearm: auto
+    primary_mode: name
+    secondary_mode: state

@@ -1,0 +1,10 @@
+{
+  "name": "annunciator-grid-card",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Industrial-style annunciator panel card for Home Assistant.",
+  "scripts": {
+    "test": "node --check dist/annunciator-grid-card.js && node tests/static-validation.js"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,43 @@
+type: custom:annunciator-grid-card
+panel_id: temperature_panel
+columns: 3
+entities:
+  - entity: sensor.stack_temperature
+    lamp_type: sensor
+    name_override: STACK TEMP
+    label_source: custom
+    always_on: true
+    primary_mode: name
+    secondary_mode: state
+    value_format:
+      mode: auto
+      convert: none
+      scale: 1
+      offset: 0
+      decimals: 1
+      rounding: round
+      unit: auto
+      prefix: ""
+      suffix: ""
+    enable_auto_styles: true
+    auto_styles:
+      - name: Critical
+        kind: numeric
+        rule:
+          type: above
+          a: 200
+          inclusive: true
+        severity: trip
+        alert: blink
+        color: "#ff3a2f"
+        force_on: true
+      - name: High
+        kind: numeric
+        rule:
+          type: above
+          a: 170
+          inclusive: true
+        severity: alarm
+        alert: pulse
+        color: "#ffb000"
+        force_on: true

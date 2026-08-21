@@ -1,0 +1,28 @@
+type: custom:annunciator-grid-card
+panel_id: pump_panel
+columns: 4
+pair_ack_lock: false
+entities:
+  - entity: binary_sensor.feed_pump_running
+    lamp_type: status
+    name_override: FEED PUMP RUNNING
+    label_source: custom
+    severity: status
+    eval_mode: toggle
+    alert_style: none
+    pair_id: pair_feed_pump
+    pair_mode: top
+    primary_mode: name
+
+  - entity: binary_sensor.feed_pump_trip
+    lamp_type: alarm
+    name_override: FEED PUMP TRIP
+    label_source: custom
+    severity: trip
+    eval_mode: toggle
+    alert_style: blink
+    alert_when: on
+    ack_rearm: auto
+    pair_id: pair_feed_pump
+    pair_mode: bottom
+    primary_mode: name

@@ -1,0 +1,39 @@
+type: custom:annunciator-grid-card
+panel_id: unit1
+columns: 4
+show_group_headers: true
+group_ack:
+  ack_scope: alerting
+  include_change: true
+group_header:
+  show_buttons: true
+  button_mode: text
+  show_ack_alerts_button: true
+  divider: true
+entities:
+  - entity: binary_sensor.boiler_trip
+    name_override: BOILER TRIP
+    label_source: custom
+    group: BOILER
+    lamp_type: alarm
+    severity: trip
+    alert_style: blink
+    ack_rearm: auto
+
+  - entity: binary_sensor.low_water
+    name_override: LOW WATER
+    label_source: custom
+    group: BOILER
+    lamp_type: alarm
+    severity: alarm
+    alert_style: blink
+    ack_rearm: auto
+
+  - entity: binary_sensor.turbine_overspeed
+    name_override: OVERSPEED
+    label_source: custom
+    group: TURBINE
+    lamp_type: alarm
+    severity: trip
+    alert_style: heartbeat
+    ack_rearm: auto

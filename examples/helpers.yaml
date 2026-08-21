@@ -1,0 +1,9 @@
+# Optional helpers. You can also create these through Home Assistant's Helpers UI.
+input_text:
+  annunciator_ack_map:
+    name: Annunciator ACK Map
+    max: 255
+
+input_boolean:
+  annunciator_lamp_test:
+    name: Annunciator Lamp Test
