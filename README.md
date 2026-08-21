@@ -147,7 +147,7 @@ In **Presentation** mode, acknowledgement is disabled. More Info can optionally 
 
 ## v1.0.0 status
 
-v1.0.0 is promoted from the extensively tested `v2.3.0-rc.5` code line. The production source differs from the final RC only in release/version text; runtime behavior is unchanged. See [VALIDATION.md](docs/VALIDATION.md).
+v1.0.0 is the current first release. See [VALIDATION.md](docs/VALIDATION.md).
 
 ## Support
 
