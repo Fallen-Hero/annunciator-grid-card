@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate source
+        run: npm test
+
+      - name: Verify tag matches card version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          grep -Fq "const CARD_VERSION = \"${VERSION}\";" dist/annunciator-grid-card.js
+          grep -Fxq "${VERSION}" VERSION
+
+      - name: Build release assets
+        shell: bash
+        run: |
+          mkdir -p release
+          cp dist/annunciator-grid-card.js release/annunciator-grid-card.js
+          (cd release && zip "annunciator-grid-card-${GITHUB_REF_NAME}.zip" annunciator-grid-card.js)
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES_FILE="release-notes/${GITHUB_REF_NAME#v}.md"
+
+          if [ -f "$NOTES_FILE" ]; then
+            gh release create "$GITHUB_REF_NAME" \
+              release/annunciator-grid-card.js \
+              "release/annunciator-grid-card-${GITHUB_REF_NAME}.zip" \
+              --title "Annunciator Grid Card ${GITHUB_REF_NAME}" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              release/annunciator-grid-card.js \
+              "release/annunciator-grid-card-${GITHUB_REF_NAME}.zip" \
+              --title "Annunciator Grid Card ${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
