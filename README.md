@@ -142,7 +142,7 @@ In **Presentation** mode, acknowledgement is disabled. More Info can optionally 
 
 ## v1.0.0 status
 
-v1.0.0 is the current first release. See [VALIDATION.md](docs/VALIDATION.md).
+v1.0.0 is the current first official release. See [VALIDATION.md](docs/VALIDATION.md).
 
 ## Support
 
