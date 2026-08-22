@@ -140,9 +140,11 @@ In **Presentation** mode, acknowledgement is disabled. More Info can optionally 
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Changelog](CHANGELOG.md)
 
-## v1.0.0 status
+## Release status
 
-v1.0.0 is the current first official release. See [VALIDATION.md](docs/VALIDATION.md).
+Stable versions are published through GitHub Releases and will be distributed through HACS once uploaded to the catalog.
+
+See the [Changelog](CHANGELOG.md) for release history and changes.
 
 ## Support
 
