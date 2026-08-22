@@ -158,24 +158,6 @@ When reporting a bug, please include:
 6. Browser-console errors.
 7. The card's **Copy diagnostic package** output when possible.
 
-Use the included GitHub issue templates so reports contain the information needed to reproduce the problem.
-
-## Development
-
-No build step is required for the current single-file card. The distributable file is:
-
-```text
-dist/annunciator-grid-card.js
-```
-
-Run the local validation checks with:
-
-```bash
-npm test
-```
-
-This checks JavaScript syntax and release/static invariants. GitHub Actions additionally run the official HACS validation action.
-
 ## ☕ Support the Project
 
 If you enjoy Annunciator Grid Card and would like to support its continued development, you can buy me a coffee:
