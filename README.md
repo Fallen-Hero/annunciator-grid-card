@@ -178,7 +178,7 @@ This checks JavaScript syntax and release/static invariants. GitHub Actions addi
 
 If you enjoy Annunciator Grid Card and would like to support its continued development, you can buy me a coffee:
 
-[☕ Buy Me a Coffee](https://buymeacoffee.com/fallenhero)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/fallenhero)
 
 Support is completely optional. Thank you for using and supporting the project!
 
