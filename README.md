@@ -138,8 +138,6 @@ In **Presentation** mode, acknowledgement is disabled. More Info can optionally 
 - [Configuration Reference](docs/CONFIG_REFERENCE.md)
 - [Examples](examples/)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Migration Guide](docs/MIGRATION.md)
-- [Validation / test status](docs/VALIDATION.md)
 - [Changelog](CHANGELOG.md)
 
 ## v1.0.0 status
