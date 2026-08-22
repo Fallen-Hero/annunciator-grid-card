@@ -1,8 +1,8 @@
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/fallenhero)
-
 # Annunciator Grid Card
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue)](#)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/fallenhero)
+
+[![GitHub Release](https://img.shields.io/github/v/release/Fallen-Hero/annunciator-grid-card)](https://github.com/Fallen-Hero/annunciator-grid-card/releases/latest)
 [![HACS](https://img.shields.io/badge/HACS-Dashboard-orange)](https://www.hacs.xyz/)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Custom%20Card-41BDF5)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
