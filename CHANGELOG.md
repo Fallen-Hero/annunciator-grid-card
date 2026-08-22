@@ -2,6 +2,17 @@
 
 All notable public-release changes are documented here.
 
+## [1.0.1] - 2026-08-21
+
+### Changed
+- Updated the README and documentation presented through HACS.
+- Improved release/version presentation to avoid stale hard-coded release information.
+- Prepared repository metadata and documentation for HACS default-catalog submission.
+
+### Runtime
+- No functional annunciator behavior changes from v1.0.0.
+- Existing configurations remain compatible.
+
 ## [1.0.0] - 2026-08-20
 
 ### Added

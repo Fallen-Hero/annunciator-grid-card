@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
-// Annunciator Grid Card v1.0.0
+// Annunciator Grid Card v1.0.1
 // Backward-compatible with v1.83/v2.x configurations; persisted config schema is v2.
 
 (() => {
-  const CARD_VERSION = "1.0.0";
+  const CARD_VERSION = "1.0.1";
   const CONFIG_VERSION = 2;
   // Legacy keys remain accepted by normalization/runtime compatibility paths, but
   // new v2 schema output does not expose them in the focused editor.
@@ -3287,7 +3287,7 @@ if (wrap.__type === "group_header") {
           }
         </style>
         <div class="shell">
-          <div class="toolbar"><div><div class="title">Annunciator Grid</div><div class="hint">v1.0.0 · physical-cell navigator · schema v2</div></div><div class="actions"><button id="addLamp">+ Lamp</button><button id="addSpacer">+ Spacer</button></div></div>
+          <div class="toolbar"><div><div class="title">Annunciator Grid</div><div class="hint">v${CARD_VERSION} · physical-cell navigator · schema v${CONFIG_VERSION}</div></div><div class="actions"><button id="addLamp">+ Lamp</button><button id="addSpacer">+ Spacer</button></div></div>
           <div id="configWarnings" class="validationBox"></div>
           <div class="workspace">
             <div class="card lampListCard">

@@ -1,6 +1,6 @@
 {
   "name": "annunciator-grid-card",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Industrial-style annunciator panel card for Home Assistant.",
   "scripts": {
