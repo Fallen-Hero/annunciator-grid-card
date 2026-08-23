@@ -1,28 +1,30 @@
+# A TOP/BOTTOM pair occupies one physical panel cell.
 type: custom:annunciator-grid-card
-panel_id: pump_panel
-columns: 4
-pair_ack_lock: false
+title: Pump Pair
+columns: 2
+pair_ack_lock: true
 entities:
-  - entity: binary_sensor.feed_pump_running
-    lamp_type: status
-    name_override: FEED PUMP RUNNING
-    label_source: custom
-    severity: status
-    eval_mode: toggle
-    alert_style: none
-    pair_id: pair_feed_pump
+  - entity: binary_sensor.pump_running
+    uid: pump_run
+    pair_id: pump_pair_1
     pair_mode: top
+    lamp_type: status
+    color_behavior: standard
+    eval_mode: toggle
     primary_mode: name
+    secondary_mode: state
+    tap_action: more_info
 
-  - entity: binary_sensor.feed_pump_trip
+  - entity: binary_sensor.pump_trip
+    uid: pump_trip
+    pair_id: pump_pair_1
+    pair_mode: bottom
     lamp_type: alarm
-    name_override: FEED PUMP TRIP
-    label_source: custom
+    color_behavior: severity
     severity: trip
     eval_mode: toggle
     alert_style: blink
     alert_when: on
     ack_rearm: auto
-    pair_id: pair_feed_pump
-    pair_mode: bottom
     primary_mode: name
+    secondary_mode: state

@@ -1,6 +1,6 @@
+# Group headers with alerting-only group ACK behavior.
 type: custom:annunciator-grid-card
-panel_id: unit1
-columns: 4
+title: Grouped Panel
 show_group_headers: true
 group_ack:
   ack_scope: alerting
@@ -12,28 +12,21 @@ group_header:
   divider: true
 entities:
   - entity: binary_sensor.boiler_trip
-    name_override: BOILER TRIP
-    label_source: custom
-    group: BOILER
+    group: Boiler
     lamp_type: alarm
+    color_behavior: severity
     severity: trip
     alert_style: blink
     ack_rearm: auto
-
-  - entity: binary_sensor.low_water
-    name_override: LOW WATER
-    label_source: custom
-    group: BOILER
+  - entity: binary_sensor.boiler_flame
+    group: Boiler
+    lamp_type: status
+    color_behavior: standard
+    alert_style: none
+  - entity: binary_sensor.pump_trip
+    group: Pumps
     lamp_type: alarm
+    color_behavior: severity
     severity: alarm
-    alert_style: blink
-    ack_rearm: auto
-
-  - entity: binary_sensor.turbine_overspeed
-    name_override: OVERSPEED
-    label_source: custom
-    group: TURBINE
-    lamp_type: alarm
-    severity: trip
-    alert_style: heartbeat
+    alert_style: pulse
     ack_rearm: auto

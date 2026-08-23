@@ -2,6 +2,44 @@
 
 All notable public-release changes are documented here.
 
+## [1.0.2] - 2026-08-23
+
+### Added
+- Cross-entity Conditional Rules with external dependency tracking.
+- Force OFF rule action alongside existing Force ON behavior.
+- Configurable per-lamp Tap / short press, Double tap, and Long press actions.
+- More Info, Toggle, Turn On, Turn Off, Acknowledge, Clear ACK, and None interaction actions.
+- Optional alternate target entities for entity-based lamp interactions.
+- Independent panel header **ACK ALL** and **CLEAR ACK** buttons with separate show/hide controls.
+- Standard ON/OFF, Severity, and Custom ON/OFF color behaviors for new/converted lamps.
+- Individual enable/disable switches for global color overrides.
+- Expanded repository runtime regression coverage.
+
+### Changed
+- New lamps default to Status-style Standard ON/OFF behavior with green ON, neutral OFF, and no alert effect.
+- Simplified the normal lamp color editor by replacing redundant ON Color / ON Window presentation with symmetrical ON/OFF color behavior.
+- Frame and Panel global colors are explicit overrides, allowing Classic, Avionics, and Neon themes to provide their own surfaces when disabled.
+- Classic, Avionics, and Neon themes are more visibly distinct.
+- Plastic, Glass, Frosted, and Smoked lens materials are more visually distinct in Modern and Retro styles.
+- Rules editor now explains when severity affects color versus when an explicit rule ON color should be used.
+- Standardized panel-wide acknowledgement labels as **ACK ALL** and **CLEAR ACK**.
+- Expanded README, complete user guide, configuration reference, troubleshooting, migration, validation notes, and examples for v1.0.2.
+
+### Fixed / hardened
+- Fixed standalone ON lamps failing to use the resolved active color while equivalent paired lamps did.
+- Preserved legacy color precedence, including legacy ON Window priority and STATUS fallback for partial hand-written severity palettes.
+- Prevented incomplete Another Entity rules from silently evaluating the lamp entity.
+- Prevented incomplete alternate interaction targets from silently operating the lamp entity.
+- Prevented double tap and long press gestures from also firing Tap actions.
+- Fixed very-long-hold and touch no-synthetic-click suppression edge cases.
+- Prevented diagnostics/info controls from bubbling gestures to a lamp.
+- Prevented lens imperfection variation from overwriting lens-material glare strength.
+- Hardened malformed decimal precision values against `toFixed()` range exceptions.
+- Fixed editor/runtime color-default drift and the seven-tab desktop layout.
+- Fixed spacer rendering references left behind by the global-color refactor.
+- Preserved old single-header ACK behavior, including the historical CLEAR ACK-only default for minimal pre-v1.0.2 configs.
+- Changed ACK ALL so it acknowledges only currently active alert channels instead of pre-ACKing inactive lamps.
+
 ## [1.0.1] - 2026-08-21
 
 ### Changed

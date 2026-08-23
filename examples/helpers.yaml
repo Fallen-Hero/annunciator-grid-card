@@ -1,4 +1,4 @@
-# Optional helpers. You can also create these through Home Assistant's Helpers UI.
+# Optional helpers for shared ACK state and Lamp Test.
 input_text:
   annunciator_ack_map:
     name: Annunciator ACK Map

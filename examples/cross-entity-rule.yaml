@@ -1,0 +1,19 @@
+# The displayed fan lamp is forced OFF when a separate maintenance helper is ON.
+type: custom:annunciator-grid-card
+title: Cross-Entity Rule
+entities:
+  - entity: switch.exhaust_fan
+    lamp_type: status
+    color_behavior: standard
+    eval_mode: toggle
+    primary_mode: name
+    secondary_mode: state
+    enable_auto_styles: true
+    auto_styles:
+      - name: Maintenance lockout
+        source: entity
+        source_entity: input_boolean.maintenance_mode
+        kind: state
+        state: "on"
+        force_state: off
+        alert: off

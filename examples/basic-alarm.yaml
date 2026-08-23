@@ -1,15 +1,13 @@
+# Traditional alarm lamp with Severity color and blinking until ACK.
 type: custom:annunciator-grid-card
-config_version: 2
-panel_id: main_panel
-columns: 4
-panel_sizing: auto_fit
-ack_store:
-  type: local
+title: Alarm Example
+panel_id: alarm_example
+show_ack_all: true
+show_clear_ack: true
 entities:
   - entity: binary_sensor.boiler_trip
     lamp_type: alarm
-    name_override: BOILER TRIP
-    label_source: custom
+    color_behavior: severity
     severity: trip
     eval_mode: toggle
     alert_style: blink

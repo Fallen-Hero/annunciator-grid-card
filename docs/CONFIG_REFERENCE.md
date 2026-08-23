@@ -1,65 +1,169 @@
-# Configuration Reference
+# Annunciator Grid Card v1.0.2 — Configuration Reference
 
-Normal users should prefer the visual editor. This reference is for advanced/manual YAML, troubleshooting, examples, and migration work.
+This is the YAML/schema reference for Annunciator Grid Card. The visual editor is recommended for normal use; manual YAML is mainly useful for examples, bulk editing, debugging, and support.
 
-## Top-level card
+> Values shown as defaults are the v1.0.2 normal/runtime defaults. Existing v1.x configurations can intentionally remain on compatibility paths instead of being silently rewritten to new behavior.
+
+## Card type
 
 ```yaml
- type: custom:annunciator-grid-card
- config_version: 2
- panel_id: annunciator_panel
- columns: 7
- entities: []
+type: custom:annunciator-grid-card
 ```
 
-### Layout
+## Top-level configuration
 
-| Key | Typical/default | Purpose |
-|---|---:|---|
-| `title` | blank | Optional panel title |
-| `columns` | `7` | Maximum physical cells per row |
-| `rows` | `3` | Minimum rows when `row_mode: fixed` |
-| `row_mode` | `auto` | `auto` or `fixed` minimum depth |
-| `panel_sizing` | `auto_fit` | `auto_fit`, `fixed`, or `scroll` |
-| `cell_width` | `225` | Configured physical cell width in px |
-| `cell_height` | `160` | Configured physical cell height in px |
-| `cell_gap` | `0` | Gap between physical cells |
-| `mullion` | `6` | Lamp/window framing thickness |
-| `outer_frame` | `6` | Outer panel frame thickness |
-| `cell_padding` | `10` | Text padding inside single/paired windows |
-| `font_size` | `13` | Lamp text size |
-| `font_weight` | `700` | Base lamp font weight |
-| `line_height` | `1.15` | Lamp text line height |
-| `corner_style` | `rounded` | `rounded` or `sharp` |
-| `corner_radius` | `12` | Rounded radius in px |
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `type` | string | `custom:annunciator-grid-card` | Lovelace card type. |
+| `config_version` | number | `2` | Persisted config schema version. |
+| `title` | string | empty | Optional panel header title. |
+| `panel_id` | string | `annunciator_panel` | Namespace used by ACK storage. Use unique IDs for independent panels. |
+| `panel_mode` | string | `operator` | `operator` or `presentation`. |
+| `presentation_allow_more_info` | boolean | `true` | In Presentation mode, optionally allow More Info. Control/ACK actions remain blocked. |
+| `columns` | number | `7` | Maximum physical cells per row. |
+| `rows` | number | `3` | Minimum rows when `row_mode: fixed`. |
+| `row_mode` | string | `auto` | `auto` or `fixed` minimum-row mode. |
+| `panel_sizing` | string | `auto_fit` | `auto_fit`, `fixed`, or `scroll`. |
+| `cell_width` | number | `225` | Cell width in pixels. |
+| `cell_height` | number | `160` | Cell height in pixels. |
+| `cell_gap` | number | `0` | Gap between cells. |
+| `mullion` | number | `6` | Frame thickness around lamp windows. |
+| `outer_frame` | number | `6` | Outer panel frame thickness. |
+| `cell_padding` | number | `10` | Text padding inside windows. |
+| `corner_style` | string | `rounded` | `rounded` or `sharp`. |
+| `corner_radius` | number | `12` | Radius in pixels when rounded. |
+| `font_size` | number | `13` | Lamp text size. |
+| `font_weight` | string/number | `700` | Lamp text weight. |
+| `line_height` | number | `1.15` | Lamp line-height multiplier. |
+| `unavailable_text` | string | `INOP` | Text shown for missing/unknown/unavailable source entities. |
+| `panel_theme` | string | `classic` | `classic`, `avionics`, or `neon`. |
+| `default_lamp_style` | string | `modern` | `modern` or `retro`. |
+| `allow_lamp_style_override` | boolean | `true` | Allow individual lamps to choose Modern/Retro. |
+| `default_lens_type` | string | `plastic` | `plastic`, `glass`, `frosted`, or `smoked`. |
+| `allow_lens_override` | boolean | `true` | Allow per-lamp lens selection. |
+| `imperfections` | boolean | `true` | Stable per-lamp surface variation. |
+| `flicker` | boolean | `false` | Optional subtle retro flicker. |
+| `retro_warmup` | boolean | `true` | Retro warm-up/cool-down animation. |
+| `severity_colors` | object | see below | Global color overrides. |
+| `severity_appearance` | object | `{}` | Optional severity → lamp style/lens map. |
+| `ack_store` | object | `{type: local}` | ACK storage backend. |
+| `show_ack_all` | boolean | `true` for new visual-editor cards | Show panel-wide ACK ALL button. |
+| `show_clear_ack` | boolean | `true` for new visual-editor cards | Show panel-wide CLEAR ACK button. |
+| `pair_ack_lock` | boolean | `false` | Link pair ACK/Clear behavior. |
+| `lamp_test_entity` | string | empty/null | Home Assistant helper/entity used for Lamp Test. |
+| `lamp_test_mode` | string | `steady` | `steady` or `full`. |
+| `show_group_headers` | boolean | `false` | Show group header rows. |
+| `group_ack` | object | implicit defaults | Group ACK behavior. |
+| `group_header` | object | implicit defaults | Group-header controls/styling. |
+| `history_overlay` | object | disabled | Diagnostics/history overlay options. |
+| `next_ack_slot` | number | `1` | Internal monotonic ACK slot allocator. Normally managed by editor. |
+| `entities` | array | `[]` | Lamp/spacer definitions. |
 
-`columns` is a maximum, not a command to create invisible blank cells. Add **Spacer** entries when a blank physical position is intentional.
+### Legacy top-level ACK keys
 
-### Appearance
+These remain readable for v1.x compatibility but are no longer the normal editor controls:
 
-| Key | Values/purpose |
-|---|---|
-| `panel_theme` | `classic`, `avionics`, `neon` |
-| `default_lamp_style` | `modern`, `retro` |
-| `default_lens_type` | `plastic`, `glass`, `frosted`, `smoked` |
-| `allow_lamp_style_override` | Allow individual lamp style choice |
-| `allow_lens_override` | Allow individual lamp lens choice |
-| `imperfections` | Stable lens texture/imperfections |
-| `flicker` | Subtle retro flicker |
-| `retro_warmup` | Retro warm-up/cool-down transition |
-| `severity_colors` | Global color map |
-| `severity_appearance` | Optional severity-specific style/lens map |
+| Key | Meaning |
+| --- | --- |
+| `show_reset_ack` | Old single header ACK button visibility. |
+| `reset_ack_action` | Old action: `clear` or `ack_all`. |
+| `reset_ack_label` | Old custom label. v1.0.2 standardizes the new two-button UI as ACK ALL / CLEAR ACK. |
 
-Default severities are TRIP, ALARM, WARN and STATUS. Global appearance also includes OFF, Unavailable, Blank, Frame, Panel and text colors.
+Compatibility mapping:
 
-### Acknowledgement
+- old Clear-only → new `show_ack_all: false`, `show_clear_ack: true`;
+- old ACK-All-only → new `show_ack_all: true`, `show_clear_ack: false`;
+- old hidden button → both hidden;
+- a minimal old config with no header keys keeps the historical Clear-only behavior;
+- new visual-editor cards explicitly store both new keys as `true`.
+
+## `severity_colors`
+
+Example new-card palette:
+
+```yaml
+severity_colors:
+  enabled: true
+  on: "#8bd66a"
+  on_enabled: true
+  off: "#f2f2f2"
+  off_enabled: true
+  status: "#8bd66a"
+  status_enabled: true
+  warn: "#ffd24a"
+  warn_enabled: true
+  alarm: "#ffb000"
+  alarm_enabled: true
+  trip: "#ff3a2f"
+  trip_enabled: true
+  unavailable: "#bdbdbd"
+  unavailable_enabled: true
+  blank: "#111111"
+  blank_enabled: true
+  frame: "#111111"
+  frame_enabled: false
+  panel: "#2a2a2a"
+  panel_enabled: false
+  on_text: "rgba(0,0,0,0.85)"
+  on_text_enabled: true
+  off_text: "#1c1c1c"
+  off_text_enabled: true
+  unavailable_text: "#1c1c1c"
+  unavailable_text_enabled: true
+```
+
+### Master switch
+
+`enabled: false` disables all global color overrides without discarding individual values/toggle preferences.
+
+### Individual switches
+
+Each color has a corresponding `<key>_enabled` flag. Disabled means that global value does not override its built-in/theme fallback.
+
+### Frame and Panel
+
+For new cards, `frame_enabled` and `panel_enabled` default false so the selected theme can visibly own those surfaces.
+
+For existing configs that explicitly contain old `frame` or `panel` values but no enable flags, v1.0.2 treats the explicit value as an intentional compatibility override.
+
+### Legacy `on_window`
+
+`on_window` / `on_window_enabled` are retained for old YAML compatibility but hidden from the simplified editor. New work should use Standard/Severity/Custom color behavior instead.
+
+## `severity_appearance`
+
+Optional style/lens map:
+
+```yaml
+severity_appearance:
+  trip:
+    style: retro
+    lens: glass
+  alarm:
+    style: modern
+    lens: smoked
+  warn:
+    style: ""
+    lens: frosted
+  status:
+    style: ""
+    lens: ""
+```
+
+Empty values inherit the panel/default resolution.
+
+## `ack_store`
+
+### Local browser
 
 ```yaml
 ack_store:
   type: local
 ```
 
-or:
+ACK is stored per browser/device in local storage.
+
+### Persistent Home Assistant helper
 
 ```yaml
 ack_store:
@@ -67,186 +171,274 @@ ack_store:
   entity: input_text.annunciator_ack_map
 ```
 
-Related keys:
+The card uses compact adaptive encoding and falls back locally if a helper write fails or encoded state exceeds helper capacity.
 
-| Key | Purpose |
-|---|---|
-| `panel_id` | ACK namespace; use a unique ID per independent panel |
-| `show_reset_ack` | Show header ACK/Clear button |
-| `reset_ack_action` | `clear` or `ack_all` |
-| `reset_ack_label` | Optional custom header-button text |
-| `pair_ack_lock` | ACK paired halves together |
-| `next_ack_slot` | Internal monotonic ACK-slot allocator; do not manually reduce |
-
-### Groups
-
-| Key | Purpose |
-|---|---|
-| `show_group_headers` | Render group headers |
-| `group_ack.ack_scope` | `all` or `alerting` |
-| `group_ack.include_change` | Include change-alert ACK state |
-| `group_header.show_buttons` | Group ACK/Clear controls |
-| `group_header.button_mode` | `icons` or `text` |
-| `group_header.show_ack_alerts_button` | Dedicated alerting-only ACK button |
-| `group_header.background` | Optional CSS background color |
-| `group_header.color` | Optional CSS text color |
-| `group_header.divider` | Bottom divider |
-
-### Advanced panel
-
-| Key | Purpose |
-|---|---|
-| `lamp_test_entity` | Optional boolean/toggle-like Lamp Test entity |
-| `lamp_test_mode` | `steady` or `full` |
-| `unavailable_text` | Text such as `INOP` |
-| `panel_mode` | `operator` or `presentation` |
-| `presentation_allow_more_info` | Keep More Info in read-only mode |
-| `history_overlay.enabled` | Enable diagnostics overlay |
-| `history_overlay.show_icon` | Show per-lamp info icon |
-
-## Lamp object
-
-A configured lamp lives under `entities:`.
+## Header ACK controls
 
 ```yaml
-entities:
-  - entity: binary_sensor.boiler_trip
-    lamp_type: alarm
-    severity: trip
-    eval_mode: toggle
-    alert_style: blink
+show_ack_all: true
+show_clear_ack: true
 ```
 
-### Identity / organization
+- `ACK ALL` ACKs only currently active alert channels.
+- `CLEAR ACK` clears stored acknowledgement for the current panel namespace.
+- both are hidden in Presentation mode;
+- Lamp Test blocks ACK mutations.
 
-| Key | Purpose |
-|---|---|
-| `entity` | Home Assistant entity ID; blank = spacer |
-| `uid` | Stable internal lamp identity; editor-managed |
-| `ack_slot` | Stable compact-ACK slot; editor-managed |
-| `lamp_type` | `alarm`, `status`, `sensor`, `custom` |
-| `name_override` | Custom label |
-| `label_source` | `entity` or `custom` |
-| `group` | Group-header/ACK grouping name |
-| `note` | Maintainer-only note |
+## Group options
 
-### ON condition
+```yaml
+show_group_headers: true
+group_ack:
+  ack_scope: alerting   # all | alerting
+  include_change: true
+group_header:
+  show_buttons: true
+  button_mode: icons    # icons | text
+  show_ack_alerts_button: false
+  background: "#222222"
+  color: "#ffffff"
+  divider: false
+```
 
-| `eval_mode` | Supporting keys |
-|---|---|
-| `toggle` | default truthy state behavior |
-| `state_equals` | `on_states` comma-separated list |
-| `string_match` | `string_match`, `string_value` |
-| `numeric_threshold` | `threshold_rule` |
+`background` and `color` accept CSS colors.
 
-String operators: `contains`, `equals`, `starts_with`, `ends_with`.
+## Diagnostics overlay
 
-Numeric rule shape:
+```yaml
+history_overlay:
+  enabled: true
+  show_icon: true
+```
+
+When enabled, the runtime can show lamp diagnostics/history information and copy support data.
+
+## Lamp / spacer configuration
+
+Each entry under `entities` is normalized independently.
+
+A spacer is simply an item whose `entity` is empty. The editor keeps UID/ACK identity so the physical cell can be moved/duplicated safely.
+
+### Identity and grouping
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `entity` | string | empty | Source Home Assistant entity. Empty = spacer. |
+| `uid` | string | generated/persisted | Stable lamp identity. Normally editor-managed. |
+| `ack_slot` | positive integer | allocated | Stable compact ACK slot. Normally editor-managed. |
+| `lamp_type` | string | inferred/status for new lamps | `alarm`, `status`, `sensor`, `custom`. |
+| `name_override` | string | empty | Custom display label. |
+| `label_source` | string | entity/custom | Label source compatibility field. |
+| `group` | string | empty | Group name. |
+| `note` | string | empty | Maintainer note; not rendered on panel. |
+
+## Lamp condition fields
+
+| Key | Values / type | Default | Meaning |
+| --- | --- | --- | --- |
+| `eval_mode` | `toggle`, `state_equals`, `string_match`, `numeric_threshold` | `toggle` | Normal ON condition mode. |
+| `on_states` | comma-separated string | `on,true,1,open` | Exact states for `state_equals`. |
+| `string_match` | `contains`, `equals`, `starts_with`, `ends_with` | `contains` | String operator. |
+| `string_value` | string | empty | String match value. |
+| `threshold_rule` | object | above 0 inclusive | Numeric rule. |
+| `invert` | boolean | `false` | Flip normal condition result. |
+| `always_on` | boolean | `false` | Force lamp ON before Conditional Rule force-state. |
+
+### Numeric threshold object
 
 ```yaml
 threshold_rule:
   type: above      # above | below | between | equal
-  a: 170
-  b: 200           # used for between
+  a: 80
+  b: 100           # used by between
   inclusive: true
 ```
 
-Numeric comparisons use the transformed logic value.
+For the lamp's own numeric condition, the transformed numeric value is used.
 
-### Display / value formatting
+## Lamp color fields
 
-| Key | Values/purpose |
-|---|---|
-| `primary_mode` | `custom`, `name`, `state` |
-| `secondary_mode` | `none`, `custom`, `state`, `entity_id`, `last_changed`, `last_updated` |
-| `tertiary_mode` | same informational modes |
-| `primary_text` / `secondary_text` / `tertiary_text` | Custom text |
-| `use_templates` | Replace normal primary/secondary display selection |
-| `label_template` | Lightweight primary template |
-| `legend_template` | Lightweight secondary template |
+### `color_behavior`
 
-Template variables include `{{name}}`, `{{state}}`, `{{value}}`, `{{unit}}`, `{{acked}}`, `{{severity}}`, and `{{attributes.xxx}}`.
+Values:
 
-`value_format` supports:
+- `standard`
+- `severity`
+- `custom`
+- `legacy`
+
+New lamps explicitly use `standard`. Existing lamps with no field normalize to `legacy` for compatibility.
+
+### `severity`
+
+```yaml
+severity: status   # status | warn | alarm | trip
+```
+
+Used for active color in Severity/Legacy mode and can be overridden by a matching Conditional Rule.
+
+### `colors`
+
+Custom mode example:
+
+```yaml
+color_behavior: custom
+colors:
+  on: "#00ff00"
+  off: "#333333"
+  on_text: "#000000"
+  text: "#ffffff"            # OFF text
+  unavailable: "#777777"
+  unavailable_text: "#ffffff"
+```
+
+Legacy compatibility fields may also include `on_window`.
+
+### `use_color_override`
+
+Legacy flag retained for old configurations. New Custom mode does not require users to reason about this flag in the editor.
+
+## Lamp display fields
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `use_templates` | boolean | `false` |
+| `label_template` | string | `{{name}}` |
+| `legend_template` | string | `{{value}} {{unit}}` |
+| `primary_mode` | `custom`, `name`, `state` | `custom` (new lamps set `name`) |
+| `primary_text` | string | empty |
+| `secondary_mode` | `none`, `custom`, `state`, `entity_id`, `last_changed`, `last_updated` | `state` |
+| `secondary_text` | string | empty |
+| `tertiary_mode` | same info choices | `none` |
+| `tertiary_text` | string | empty |
+
+### Template variables
+
+```text
+{{name}}
+{{state}}
+{{value}}
+{{unit}}
+{{acked}}
+{{severity}}
+{{attributes.xxx}}
+```
+
+These are card-side substitutions, not Home Assistant Jinja.
+
+## `value_format`
 
 ```yaml
 value_format:
-  convert: none     # none | c_to_f | f_to_c
+  mode: auto             # auto | number | text
+  decimals: 0            # editor offers 0..3; runtime safely clamps malformed values
+  rounding: round        # round | floor | ceil
+  unit: auto             # auto | none | override
+  unit_override: ""
+  convert: none          # none | c_to_f | f_to_c
   scale: 1
   offset: 0
-  decimals: 0
-  rounding: round   # round | floor | ceil
-  unit: auto        # auto | none | override
-  unit_override: ""
-  mode: auto        # auto | number | text
   prefix: ""
   suffix: ""
 ```
 
-Pipeline:
+Logic transform:
 
 ```text
-HA state → conversion → scale → offset → logic value → display rounding/unit/prefix/suffix
+raw numeric state
+→ temperature conversion
+→ multiply by scale
+→ add offset
 ```
 
-### Severity / alert
+Display rounding/unit/prefix/suffix happen after logic evaluation.
 
-| Key | Purpose |
-|---|---|
-| `severity` | `status`, `warn`, `alarm`, `trip` |
-| `alert_style` | `none`, `blink`, `pulse`, `wave`, `throb`, `heartbeat`, `flash` |
-| `alert_when` | `on`, `off`, `both` |
-| `ack_rearm` | `manual`, `auto` |
-| `alert_speed` | `slow`, `normal`, `fast` |
-| `alert_opacity_depth` | 0..1 |
-| `alert_border_emphasis` | `none`, `soft`, `strong` |
-| `alert_wave_radius` | Wave radius in px |
-| `alert_throb_subtlety` | Throb tuning 0..1 |
+## Alert fields
 
-### Change alert
+| Key | Values | Default |
+| --- | --- | --- |
+| `alert_style` | `none`, `blink`, `pulse`, `wave`, `throb`, `heartbeat`, `flash` | normalized from legacy flags / none for new status |
+| `alert_when` | `on`, `off`, `both` | `on` via compatibility field |
+| `blink_mode` | `on`, `off`, `both` | `on` | Legacy alias used as fallback for Alert when. |
+| `blink` | boolean | `false` | Legacy compatibility flag. |
+| `pulse` | boolean | false/legacy | Legacy compatibility flag. |
+| `ack_rearm` | `manual`, `auto` | legacy default `manual`; new lamps use `auto` |
+| `alert_speed` | `slow`, `normal`, `fast` | `normal` |
+| `alert_opacity_depth` | 0..1 | `0.5` |
+| `alert_border_emphasis` | `none`, `soft`, `strong` | `soft` |
+| `alert_wave_radius` | number | `10` |
+| `alert_throb_subtlety` | 0..1 | `0.5` |
 
-| Key | Purpose |
-|---|---|
-| `blink_on_change` | Enable state/value-change alert |
-| `blink_on_change_until_ack` | Continue until ACK instead of timed duration |
-| `blink_on_change_seconds` | Timed duration |
-| `alert_on_change_style` | `inherit`, normal effects, or `off` |
-| `blink_on_change_filter_mode` | `any`, `state_equals`, `string_match`, `numeric_threshold` |
-| `alert_on_change_speed` | Optional override |
-| `alert_on_change_opacity_depth` | Optional override |
-| `alert_on_change_border_emphasis` | Optional override |
-| `alert_on_change_wave_radius` | Optional override |
-| `alert_on_change_throb_subtlety` | Optional override |
+## Change alert fields
 
-### Per-lamp appearance
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `blink_on_change` | `false` | Enable change-event channel. |
+| `blink_on_change_seconds` | `3` | Timed duration when not until-ACK. |
+| `blink_on_change_until_ack` | `false` | Continue until acknowledged. |
+| `blink_on_change_filter_mode` | `any` | `any`, `state_equals`, `string_match`, `numeric_threshold`. |
+| `blink_on_change_state` | empty | Exact state filter. |
+| `blink_on_change_string_match` | `contains` | String filter operator. |
+| `blink_on_change_string_value` | empty | String filter value. |
+| `blink_on_change_threshold_rule` | above 0 inclusive | Numeric filter. |
+| `alert_on_change_style` | `inherit` | `inherit`, `off`, or normal alert effects. |
+| `alert_on_change_speed` | empty | Empty = inherit. |
+| `alert_on_change_opacity_depth` | empty | Empty = inherit. |
+| `alert_on_change_border_emphasis` | empty | Empty = inherit. |
+| `alert_on_change_wave_radius` | empty | Empty = inherit. |
+| `alert_on_change_throb_subtlety` | empty | Empty = inherit. |
 
-| Key | Purpose |
-|---|---|
-| `lamp_style` | `inherit`, `modern`, `retro` |
-| `lens_type` | `inherit`, `plastic`, `glass`, `frosted`, `smoked` |
-| `use_color_override` | Enable lamp-local colors |
-| `colors.on` | ON severity/current color |
-| `colors.on_window` | Explicit ON lens/window background |
-| `colors.on_text` | ON text |
-| `colors.off` | OFF window |
-| `colors.text` | OFF text |
-| `colors.unavailable` | Unavailable window |
-| `colors.unavailable_text` | Unavailable text |
+## Interaction fields
 
-A matching Conditional Rule ON color has higher priority than a per-lamp ON color.
+Each gesture has action/target/entity fields.
 
-### Pairing
+### Actions
 
-Normally managed by the visual editor:
+Supported action values:
+
+```text
+more_info
+toggle
+turn_on
+turn_off
+ack
+clear_ack
+none
+```
+
+### Tap
 
 ```yaml
-pair_id: pair_...
-pair_mode: top     # top | bottom | none
+tap_action: more_info
+tap_target: self       # self | entity
+tap_entity: ""         # required only when target=entity for entity-based actions
 ```
 
-A valid pair has exactly one TOP and one BOTTOM and occupies one physical panel cell.
+### Double tap
 
-### Conditional Rules
+```yaml
+double_tap_action: ack
+double_tap_target: self
+double_tap_entity: ""
+```
+
+### Long press
+
+```yaml
+hold_action: ack
+hold_target: self
+hold_entity: ""
+```
+
+Entity targets are used only by More Info / Toggle / Turn On / Turn Off. A missing alternate entity is a safe no-op.
+
+### Keyboard mapping
+
+- Enter → Tap
+- Space → Double tap
+- Shift+Space → Long press
+
+## Conditional Rules
 
 Enable with:
 
@@ -254,15 +446,179 @@ Enable with:
 enable_auto_styles: true
 ```
 
-Rules are stored in `auto_styles` for backward compatibility. **First matching rule wins.** A rule can match numeric/state/string conditions and override severity, alert effect, ON color and Force ON.
+Rules live in `auto_styles` and are processed in order. First match wins.
 
-### Advanced flags
+### Rule example
 
-| Key | Purpose |
-|---|---|
-| `always_on` | Force ON independent of normal condition |
-| `invert` | Invert result after condition evaluation |
+```yaml
+auto_styles:
+  - name: High temperature trip
+    source: self
+    kind: numeric
+    rule:
+      type: above
+      a: 200
+      inclusive: true
+    severity: trip
+    alert: blink
+    force_state: on
+    color: "#ff0000"
+```
 
-## Internal fields
+### Rule source
 
-`uid`, `ack_slot`, `next_ack_slot`, and generated Pair IDs are editor/runtime identity data. They should generally be left to the card rather than renumbered manually.
+```yaml
+source: self
+source_entity: ""
+```
+
+or:
+
+```yaml
+source: entity
+source_entity: input_boolean.maintenance_mode
+```
+
+A rule explicitly configured for `source: entity` does not fall back to the lamp entity when `source_entity` is blank.
+
+### Rule condition fields
+
+#### Numeric
+
+```yaml
+kind: numeric
+rule:
+  type: above      # above | below | between | equal
+  a: 10
+  b: 20
+  inclusive: true
+```
+
+#### State
+
+```yaml
+kind: state
+state: "on"
+```
+
+#### String
+
+```yaml
+kind: string
+match: contains    # contains | equals | starts_with | ends_with
+value: FAULT
+```
+
+### Rule effects
+
+| Key | Meaning |
+| --- | --- |
+| `severity` | Optional Status/Warn/Alarm/Trip override. |
+| `alert` | `off` or any supported alert effect. Omit/inherit to keep base behavior. |
+| `force_state` | `on` or `off`; omit for inherit. |
+| `color` | Direct ON-color override. |
+| `on_color` | Legacy alias accepted by runtime. |
+| `force_on` | Legacy boolean accepted for compatibility. |
+| `force_off` | Compatibility boolean accepted; normalized into force state. |
+
+Cross-entity numeric rules compare the external entity's raw numeric state.
+
+## Pair fields
+
+```yaml
+pair_id: pair_abc123
+pair_mode: top       # top | bottom | none
+```
+
+A valid pair consists of exactly two compatible entries sharing `pair_id`, one TOP and one BOTTOM. The editor creates/canonicalizes these values automatically.
+
+## Lamp appearance fields
+
+```yaml
+lamp_style: inherit    # inherit | modern | retro
+lens_type: inherit     # inherit | plastic | glass | frosted | smoked
+```
+
+Panel-wide allow/lock settings determine whether per-lamp selections can override defaults.
+
+## Internal identity fields
+
+`uid`, `ack_slot`, `next_ack_slot`, and generated `pair_id` values are part of persistence/repair behavior. Manual editing is possible but discouraged. The editor and validation system are designed to keep them stable and unique.
+
+## Resolution / precedence summary
+
+### Lamp state
+
+```text
+condition → invert → always_on → rule force_state → Lamp Test
+```
+
+### Rule
+
+```text
+first matching rule wins
+```
+
+### Standard active color
+
+```text
+rule explicit color → enabled global ON → built-in ON
+```
+
+### Severity active color
+
+```text
+rule explicit color → enabled selected severity → enabled global ON → built-in fallback
+```
+
+### Custom active color
+
+```text
+rule explicit color → lamp colors.on → enabled global ON → built-in ON
+```
+
+### Custom inactive color
+
+```text
+lamp colors.off → enabled global OFF → built-in OFF
+```
+
+### Legacy
+
+The v1.x resolver remains available and preserves legacy ON Window/severity precedence as closely as possible while including the standalone/paired rendering bug fix.
+
+## Minimal examples
+
+### Standard ON/OFF
+
+```yaml
+type: custom:annunciator-grid-card
+entities:
+  - entity: light.kitchen
+    color_behavior: standard
+    eval_mode: toggle
+```
+
+### Configurable interaction
+
+```yaml
+type: custom:annunciator-grid-card
+entities:
+  - entity: binary_sensor.garage_door_open
+    color_behavior: standard
+    tap_action: toggle
+    tap_target: entity
+    tap_entity: cover.garage_door
+    double_tap_action: more_info
+    double_tap_target: entity
+    double_tap_entity: cover.garage_door
+    hold_action: ack
+```
+
+### Header buttons
+
+```yaml
+type: custom:annunciator-grid-card
+show_ack_all: true
+show_clear_ack: true
+```

@@ -1,0 +1,23 @@
+# Display one entity and optionally control another with configurable gestures.
+type: custom:annunciator-grid-card
+title: Garage
+entities:
+  - entity: binary_sensor.garage_door_open
+    lamp_type: status
+    color_behavior: standard
+    eval_mode: toggle
+    primary_mode: name
+    secondary_mode: state
+
+    # Tap controls the garage cover instead of opening the binary sensor dialog.
+    tap_action: toggle
+    tap_target: entity
+    tap_entity: cover.garage_door
+
+    # Double tap opens the cover's More Info dialog.
+    double_tap_action: more_info
+    double_tap_target: entity
+    double_tap_entity: cover.garage_door
+
+    # Long press does nothing for this lamp.
+    hold_action: none

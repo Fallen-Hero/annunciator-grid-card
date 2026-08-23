@@ -1,27 +1,26 @@
+# Severity ladder for a numeric sensor. First matching rule wins, so highest
+# thresholds belong first.
 type: custom:annunciator-grid-card
-panel_id: temperature_panel
-columns: 3
+title: Temperature Status
 entities:
   - entity: sensor.stack_temperature
     lamp_type: sensor
-    name_override: STACK TEMP
-    label_source: custom
+    color_behavior: severity
+    severity: status
     always_on: true
     primary_mode: name
     secondary_mode: state
     value_format:
-      mode: auto
-      convert: none
-      scale: 1
-      offset: 0
+      mode: number
       decimals: 1
       rounding: round
       unit: auto
-      prefix: ""
-      suffix: ""
+      convert: none
+      scale: 1
+      offset: 0
     enable_auto_styles: true
     auto_styles:
-      - name: Critical
+      - name: Trip
         kind: numeric
         rule:
           type: above
@@ -29,15 +28,19 @@ entities:
           inclusive: true
         severity: trip
         alert: blink
-        color: "#ff3a2f"
-        force_on: true
-      - name: High
+      - name: Alarm
         kind: numeric
         rule:
           type: above
-          a: 170
+          a: 175
           inclusive: true
         severity: alarm
         alert: pulse
-        color: "#ffb000"
-        force_on: true
+      - name: Warning
+        kind: numeric
+        rule:
+          type: above
+          a: 150
+          inclusive: true
+        severity: warn
+        alert: off

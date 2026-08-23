@@ -1,32 +1,41 @@
+# Feature-oriented example. Replace entity IDs with entities that exist in your HA.
 type: custom:annunciator-grid-card
-config_version: 2
-title: UNIT 1 ANNUNCIATOR
-panel_id: unit1
+title: Main Annunciator
+panel_id: main_annunciator
 columns: 4
-row_mode: auto
 panel_sizing: auto_fit
-cell_width: 200
-cell_height: 120
-cell_gap: 0
-mullion: 6
-outer_frame: 6
-cell_padding: 10
-font_size: 13
-font_weight: "700"
-line_height: 1.15
-corner_style: rounded
-corner_radius: 8
-panel_theme: classic
-default_lamp_style: retro
-default_lens_type: plastic
-retro_warmup: true
-show_reset_ack: true
-reset_ack_action: clear
+row_mode: auto
+panel_theme: avionics
+default_lamp_style: modern
+default_lens_type: glass
+allow_lamp_style_override: true
+allow_lens_override: true
+show_ack_all: true
+show_clear_ack: true
 ack_store:
   type: input_text
   entity: input_text.annunciator_ack_map
 lamp_test_entity: input_boolean.annunciator_lamp_test
 lamp_test_mode: steady
+pair_ack_lock: true
+severity_colors:
+  enabled: true
+  on: "#8bd66a"
+  on_enabled: true
+  off: "#f2f2f2"
+  off_enabled: true
+  status: "#8bd66a"
+  status_enabled: true
+  warn: "#ffd24a"
+  warn_enabled: true
+  alarm: "#ffb000"
+  alarm_enabled: true
+  trip: "#ff3a2f"
+  trip_enabled: true
+  unavailable: "#bdbdbd"
+  unavailable_enabled: true
+  frame_enabled: false
+  panel_enabled: false
 show_group_headers: true
 group_ack:
   ack_scope: alerting
@@ -35,17 +44,41 @@ group_header:
   show_buttons: true
   button_mode: icons
   show_ack_alerts_button: true
-  divider: true
 history_overlay:
   enabled: true
   show_icon: true
 entities:
+  - entity: light.porch
+    group: House
+    lamp_type: status
+    color_behavior: standard
+    eval_mode: toggle
+    alert_style: none
+    primary_mode: name
+    secondary_mode: state
+    tap_action: toggle
+    double_tap_action: more_info
+    hold_action: none
+
+  - entity: binary_sensor.front_door
+    group: House
+    lamp_type: status
+    color_behavior: standard
+    eval_mode: state_equals
+    on_states: open
+    primary_mode: name
+    secondary_mode: state
+    blink_on_change: true
+    blink_on_change_until_ack: false
+    blink_on_change_seconds: 3
+    alert_on_change_style: flash
+
   - entity: binary_sensor.boiler_trip
-    name_override: BOILER TRIP
-    label_source: custom
-    group: BOILER
+    group: Boiler
     lamp_type: alarm
+    color_behavior: severity
     severity: trip
+    eval_mode: toggle
     alert_style: blink
     alert_when: on
     ack_rearm: auto
@@ -53,54 +86,48 @@ entities:
     secondary_mode: state
 
   - entity: sensor.stack_temperature
-    name_override: STACK TEMP
-    label_source: custom
-    group: BOILER
+    group: Boiler
     lamp_type: sensor
+    color_behavior: severity
+    severity: status
     always_on: true
     primary_mode: name
     secondary_mode: state
     value_format:
       decimals: 1
-      rounding: round
       unit: auto
-      convert: none
       scale: 1
       offset: 0
-      mode: auto
     enable_auto_styles: true
     auto_styles:
-      - name: High stack temperature
+      - name: Trip
         kind: numeric
-        rule:
-          type: above
-          a: 170
-          inclusive: true
+        rule: {type: above, a: 200, inclusive: true}
+        severity: trip
+        alert: blink
+      - name: Alarm
+        kind: numeric
+        rule: {type: above, a: 175, inclusive: true}
         severity: alarm
         alert: pulse
-        force_on: true
-
-  - entity: binary_sensor.feed_pump_running
-    name_override: FEED PUMP RUNNING
-    label_source: custom
-    group: FEEDWATER
-    lamp_type: status
-    severity: status
-    alert_style: none
-    pair_id: pair_feed_pump
-    pair_mode: top
-    primary_mode: name
-
-  - entity: binary_sensor.feed_pump_trip
-    name_override: FEED PUMP TRIP
-    label_source: custom
-    group: FEEDWATER
-    lamp_type: alarm
-    severity: trip
-    alert_style: blink
-    ack_rearm: auto
-    pair_id: pair_feed_pump
-    pair_mode: bottom
-    primary_mode: name
+      - name: Maintenance suppress
+        source: entity
+        source_entity: input_boolean.maintenance_mode
+        kind: state
+        state: "on"
+        force_state: off
+        alert: off
 
   - entity: ""
+
+  - entity: binary_sensor.garage_door_open
+    group: Garage
+    lamp_type: status
+    color_behavior: standard
+    tap_action: toggle
+    tap_target: entity
+    tap_entity: cover.garage_door
+    double_tap_action: more_info
+    double_tap_target: entity
+    double_tap_entity: cover.garage_door
+    hold_action: none

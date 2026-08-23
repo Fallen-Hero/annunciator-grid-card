@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
-// Annunciator Grid Card v1.0.1
+// Annunciator Grid Card v1.0.2
 // Backward-compatible with v1.83/v2.x configurations; persisted config schema is v2.
 
 (() => {
-  const CARD_VERSION = "1.0.1";
+  const CARD_VERSION = "1.0.2";
   const CONFIG_VERSION = 2;
   // Legacy keys remain accepted by normalization/runtime compatibility paths, but
   // new v2 schema output does not expose them in the focused editor.
@@ -71,6 +71,32 @@
   };
   const panelMode = (cfg) => String((cfg && cfg.panel_mode) || "operator").toLowerCase();
   const isPresentation = (cfg) => panelMode(cfg) === "presentation";
+
+  // Header ACK controls were a single configurable button before v1.0.2.
+  // New configurations use two independent buttons. Legacy configurations keep
+  // their previous single-button visibility until the user changes the new toggles.
+  const headerAckButtons = (cfg) => {
+    const c = cfg || {};
+    const own = (k) => Object.prototype.hasOwnProperty.call(c, k);
+    const hasNew = own("show_ack_all") || own("show_clear_ack");
+    if (hasNew) {
+      return {
+        ackAll: own("show_ack_all") ? c.show_ack_all !== false : true,
+        clearAck: own("show_clear_ack") ? c.show_clear_ack !== false : true,
+        legacy: false,
+      };
+    }
+    const hasLegacy = own("show_reset_ack") || own("reset_ack_action") || own("reset_ack_label");
+    if (hasLegacy) {
+      if (c.show_reset_ack === false) return { ackAll: false, clearAck: false, legacy: true };
+      const action = String(c.reset_ack_action || "clear").toLowerCase();
+      return { ackAll: action === "ack_all", clearAck: action !== "ack_all", legacy: true };
+    }
+    // No header keys means a hand-written/minimal pre-v1.0.2 configuration.
+    // v1.x showed its default CLEAR ACK button in this case. New cards created
+    // by the visual editor explicitly store show_ack_all/show_clear_ack=true.
+    return { ackAll: false, clearAck: true, legacy: true };
+  };
 
   const deepGet = (obj, path) =>
     String(path || "")
@@ -169,19 +195,40 @@
     return `${type} ${a}`;
   };
 
+  const autoRuleSourceEntity = (auto) => String(auto?.source_entity || "").trim();
+
+  const autoRuleUsesExternalSource = (auto) => {
+    const explicit = String(auto?.source || "").toLowerCase();
+    return explicit === "entity" || !!autoRuleSourceEntity(auto);
+  };
+
+  const autoRuleForceState = (auto) => {
+    const explicit = String(auto?.force_state || "").toLowerCase();
+    if (explicit === "on" || explicit === "off") return explicit;
+    // Backward compatibility with pre-v1.0.2 rule flags.
+    if (auto?.force_off === true) return "off";
+    if (auto?.force_on === true) return "on";
+    return "inherit";
+  };
+
   const describeAutoCondition = (auto) => {
     const kind = String(auto?.__match_kind || auto?.kind || "").toLowerCase();
-    if (kind === "numeric") return `numeric ${describeThresholdRule(auto.rule)}`;
-    if (kind === "state") return `state == ${yamlQuote(auto.state ?? "")}`;
-    if (kind === "string") return `string ${String(auto.match || "contains")} ${yamlQuote(auto.value || "")}`;
-    return kind ? `${kind} match` : "match";
+    const configuredSource = autoRuleSourceEntity(auto);
+    const source = String(auto?.__match_source || configuredSource || (autoRuleUsesExternalSource(auto) ? "[select source entity]" : "this lamp"));
+    const prefix = source === "this lamp" ? "" : `${source}: `;
+    if (kind === "numeric") return `${prefix}numeric ${describeThresholdRule(auto.rule)}`;
+    if (kind === "state") return `${prefix}state == ${yamlQuote(auto.state ?? "")}`;
+    if (kind === "string") return `${prefix}string ${String(auto.match || "contains")} ${yamlQuote(auto.value || "")}`;
+    return `${prefix}${kind ? `${kind} match` : "match"}`;
   };
 
   const describeAutoEffects = (auto) => {
     if (!auto || typeof auto !== "object") return "-";
     const effects = [];
     if (auto.severity) effects.push(`severity=${auto.severity}`);
-    if (auto.force_on) effects.push("force_on");
+    const forced = autoRuleForceState(auto);
+    if (forced === "on") effects.push("force_on");
+    if (forced === "off") effects.push("force_off");
     const alert = (typeof auto.alert === "string") ? auto.alert : null;
     if (alert) effects.push(`alert=${alert}`);
     else {
@@ -193,6 +240,129 @@
   };
 
   const isTruthyState = (s) => s === "on" || s === "true" || s === "1";
+
+  // Canonical built-in fallbacks. Global settings are optional overrides; when an
+  // override is disabled these values (or the selected panel theme for surfaces)
+  // remain the safe baseline.
+  const BUILTIN_COLORS = Object.freeze({
+    on: "#8bd66a",
+    off: "#f2f2f2",
+    status: "#8bd66a",
+    warn: "#ffd24a",
+    alarm: "#ffb000",
+    trip: "#ff3a2f",
+    unavailable: "#bdbdbd",
+    blank: "#111111",
+    frame: "#111111",
+    panel: "#2a2a2a",
+    on_text: "rgba(0,0,0,0.85)",
+    off_text: "#1c1c1c",
+    unavailable_text: "#1c1c1c",
+    text: "#1c1c1c",
+  });
+
+  const cleanColor = (value) => String(value ?? "").trim();
+
+  const colorOverrideEnabled = (colors, key, defaultEnabled = true) => {
+    const c = ensureObj(colors, {});
+    if (c.enabled === false) return false;
+    const flag = c[`${key}_enabled`];
+    return flag === undefined ? !!defaultEnabled : flag !== false;
+  };
+
+  const globalColorValue = (colors, key, fallback, defaultEnabled = true) => {
+    if (!colorOverrideEnabled(colors, key, defaultEnabled)) return fallback;
+    return cleanColor(ensureObj(colors, {})[key]) || fallback;
+  };
+
+  // Legacy is retained for existing v1.x configurations. New lamps explicitly use
+  // Standard, Severity or Custom so normal Home Assistant users only need ON/OFF.
+  const normalizeColorBehavior = (value) => {
+    const v = String(value || "legacy").toLowerCase();
+    return ["legacy", "standard", "severity", "custom"].includes(v) ? v : "legacy";
+  };
+
+  const resolveLampColors = (itemInput, resolved, colorsInput) => {
+    const item = normalizeLamp(itemInput || {});
+    const colors = ensureObj(colorsInput, {});
+    const eColors = ensureObj(item.colors, {});
+    const behavior = normalizeColorBehavior(item.color_behavior);
+    const severity = ["trip", "alarm", "warn", "status"].includes(String(resolved?.severity || "").toLowerCase())
+      ? String(resolved.severity).toLowerCase() : "status";
+    const autoColor = cleanColor(resolved?.autoOnColor);
+    const useLegacyOverride = !!item.use_color_override;
+    const legacyOn = useLegacyOverride ? cleanColor(eColors.on) : "";
+    const legacyOff = useLegacyOverride ? cleanColor(eColors.off) : "";
+    const legacyWindow = useLegacyOverride ? cleanColor(eColors.on_window) : "";
+
+    const globalOn = globalColorValue(colors, "on", BUILTIN_COLORS.on);
+    const globalOff = globalColorValue(colors, "off", BUILTIN_COLORS.off);
+    const severityColor = colorOverrideEnabled(colors, severity)
+      ? (cleanColor(colors[severity]) || BUILTIN_COLORS[severity] || BUILTIN_COLORS.status)
+      : "";
+
+    let onColor = globalOn;
+    let offColor = globalOff;
+    let onWindowColor = onColor;
+
+    if (behavior === "legacy") {
+      // Exact compatibility path: legacy lamps continue to resolve severity first,
+      // with their old ON Window override still taking final visual precedence.
+      let legacySeverity = "";
+      if (colors.enabled !== false) {
+        if (colorOverrideEnabled(colors, severity)) legacySeverity = cleanColor(colors[severity]);
+        // v1.x fell back to STATUS when a specific severity color was absent.
+        // Preserve that behavior for hand-written/partial legacy configurations.
+        if (!legacySeverity && colorOverrideEnabled(colors, "status")) legacySeverity = cleanColor(colors.status);
+      }
+      legacySeverity = legacySeverity || globalOn;
+      onColor = autoColor || legacyOn || legacySeverity;
+      offColor = legacyOff || globalOff;
+      const legacyGlobalWindow = colorOverrideEnabled(colors, "on_window") ? cleanColor(colors.on_window) : "";
+      onWindowColor = legacyWindow || legacyGlobalWindow || onColor;
+    } else if (behavior === "severity") {
+      onColor = autoColor || severityColor || globalOn;
+      onWindowColor = onColor;
+    } else if (behavior === "custom") {
+      onColor = autoColor || cleanColor(eColors.on) || globalOn;
+      offColor = cleanColor(eColors.off) || globalOff;
+      onWindowColor = onColor;
+    } else {
+      // Standard: intentionally ignores severity. This is the simple ON/OFF mode.
+      onColor = autoColor || globalOn;
+      offColor = globalOff;
+      onWindowColor = onColor;
+    }
+
+    const customText = behavior === "custom" || useLegacyOverride;
+    const onText = customText && cleanColor(eColors.on_text)
+      ? cleanColor(eColors.on_text)
+      : globalColorValue(colors, "on_text", BUILTIN_COLORS.on_text);
+    const offText = customText && cleanColor(eColors.text)
+      ? cleanColor(eColors.text)
+      : globalColorValue(colors, "off_text", globalColorValue(colors, "text", BUILTIN_COLORS.off_text));
+    const unavailable = customText && cleanColor(eColors.unavailable)
+      ? cleanColor(eColors.unavailable)
+      : globalColorValue(colors, "unavailable", BUILTIN_COLORS.unavailable);
+    const unavailableText = customText && cleanColor(eColors.unavailable_text)
+      ? cleanColor(eColors.unavailable_text)
+      : globalColorValue(colors, "unavailable_text", globalColorValue(colors, "text", BUILTIN_COLORS.unavailable_text));
+
+    return { behavior, severity, onColor, offColor, onWindowColor, onText, offText, unavailable, unavailableText };
+  };
+
+  const INTERACTION_ACTIONS = new Set(["none", "more_info", "toggle", "turn_on", "turn_off", "ack", "clear_ack"]);
+  const normalizeInteractionAction = (value, fallback = "none") => {
+    const v = String(value || fallback).toLowerCase();
+    return INTERACTION_ACTIONS.has(v) ? v : fallback;
+  };
+  const interactionNeedsEntity = (action) => ["more_info", "toggle", "turn_on", "turn_off"].includes(normalizeInteractionAction(action));
+  const interactionTargetEntity = (item, gesture) => {
+    const prefix = gesture === "double" ? "double_tap" : gesture === "hold" ? "hold" : "tap";
+    const mode = String(item?.[`${prefix}_target`] || "self").toLowerCase();
+    const alternate = String(item?.[`${prefix}_entity`] || "").trim();
+    return mode === "entity" ? alternate : String(item?.entity || "").trim();
+  };
 
   // Handles: "65.2 °F", "1,234", "12ms", etc.
   const toNumber = (v) => {
@@ -229,11 +399,14 @@
   const formatNumberWith = (num, vf) => {
     if (Number.isNaN(num)) return "";
     const f = ensureObj(vf, {});
-    const decimals = clampNum(f.decimals, 0);
+    // The visual editor offers 0..3 decimals, but manual YAML can contain arbitrary
+    // values. Clamp and integer-normalize here so malformed/out-of-range config can
+    // never make Number#toFixed throw and take down the whole card render.
+    const decimals = Math.max(0, Math.min(6, Math.trunc(clampNum(f.decimals, 0))));
     const rounding = String(f.rounding || "round").toLowerCase();
 
     let n = num;
-    const pow = Math.pow(10, Math.max(0, Math.min(6, decimals)));
+    const pow = Math.pow(10, decimals);
     if (rounding === "floor") n = Math.floor(n * pow) / pow;
     else if (rounding === "ceil") n = Math.ceil(n * pow) / pow;
     else n = Math.round(n * pow) / pow;
@@ -418,16 +591,40 @@ if (lamp.invert === undefined) lamp.invert = false;
     if (lamp.threshold_rule.b === undefined) lamp.threshold_rule.b = 0;
     if (lamp.threshold_rule.inclusive === undefined) lamp.threshold_rule.inclusive = true;
 
-    // Colors
+    // Colors. Existing configurations have no color_behavior and therefore stay
+    // on the legacy resolver until the user explicitly chooses a simplified mode.
+    if (lamp.color_behavior === undefined) lamp.color_behavior = "legacy";
+    lamp.color_behavior = normalizeColorBehavior(lamp.color_behavior);
     if (lamp.use_color_override === undefined) lamp.use_color_override = false;
     if (lamp.colors.on === undefined) lamp.colors.on = "";
     if (lamp.colors.off === undefined) lamp.colors.off = "";
     if (lamp.colors.text === undefined) lamp.colors.text = "";
+    if (lamp.colors.on_window === undefined) lamp.colors.on_window = "";
 
     // Extended per-lamp colors
     if (lamp.colors.on_text === undefined) lamp.colors.on_text = "";
     if (lamp.colors.unavailable === undefined) lamp.colors.unavailable = "";
     if (lamp.colors.unavailable_text === undefined) lamp.colors.unavailable_text = "";
+
+    // Per-lamp interactions. Defaults reproduce v1.x behavior.
+    if (lamp.tap_action === undefined) lamp.tap_action = "more_info";
+    if (lamp.double_tap_action === undefined) lamp.double_tap_action = "ack";
+    if (lamp.hold_action === undefined) lamp.hold_action = "ack";
+    lamp.tap_action = normalizeInteractionAction(lamp.tap_action, "more_info");
+    lamp.double_tap_action = normalizeInteractionAction(lamp.double_tap_action, "ack");
+    lamp.hold_action = normalizeInteractionAction(lamp.hold_action, "ack");
+    if (lamp.tap_target === undefined) lamp.tap_target = "self";
+    if (lamp.double_tap_target === undefined) lamp.double_tap_target = "self";
+    if (lamp.hold_target === undefined) lamp.hold_target = "self";
+    lamp.tap_target = String(lamp.tap_target).toLowerCase() === "entity" ? "entity" : "self";
+    lamp.double_tap_target = String(lamp.double_tap_target).toLowerCase() === "entity" ? "entity" : "self";
+    lamp.hold_target = String(lamp.hold_target).toLowerCase() === "entity" ? "entity" : "self";
+    if (lamp.tap_entity === undefined) lamp.tap_entity = "";
+    if (lamp.double_tap_entity === undefined) lamp.double_tap_entity = "";
+    if (lamp.hold_entity === undefined) lamp.hold_entity = "";
+    lamp.tap_entity = String(lamp.tap_entity || "").trim();
+    lamp.double_tap_entity = String(lamp.double_tap_entity || "").trim();
+    lamp.hold_entity = String(lamp.hold_entity || "").trim();
     // Value formatting (applies to primary/secondary when showing state/value)
     // Kept intentionally simple for v1: decimals + rounding + unit + basic conversions.
     if (lamp.value_format === undefined) lamp.value_format = {};
@@ -486,22 +683,41 @@ if (lamp.invert === undefined) lamp.invert = false;
   // ============================================================
   // Auto Style Evaluation
   // ============================================================
-  const pickAutoStyle = (item, rawState, valueNum) => {
+  const pickAutoStyle = (item, rawState, valueNum, states = null) => {
     const styles = Array.isArray(item?.auto_styles) ? item.auto_styles : [];
     for (let i = 0; i < styles.length; i++) {
       const s0 = styles[i];
       const kind = String(s0?.kind || "").toLowerCase();
+      const sourceEntity = autoRuleSourceEntity(s0);
+      const usesExternalSource = autoRuleUsesExternalSource(s0);
+      let sourceRawState = rawState;
+      let sourceValueNum = valueNum;
+
+      if (usesExternalSource) {
+        // A rule explicitly configured for Another entity is incomplete until an
+        // entity is selected. Never silently fall back to evaluating the lamp itself.
+        if (!sourceEntity) continue;
+        const sourceObj = states && typeof states === "object" ? states[sourceEntity] : null;
+        if (!sourceObj || sourceObj.state === "unknown" || sourceObj.state === "unavailable") continue;
+        sourceRawState = sourceObj.state;
+        // Cross-entity numeric rules compare against that entity's raw numeric state.
+        // The lamp's own scale/offset/conversion must never alter another entity.
+        sourceValueNum = toNumber(sourceRawState);
+      }
 
       const matched =
-        (kind === "numeric" && !Number.isNaN(valueNum) && evalRuleThreshold(s0.rule, valueNum)) ||
-        (kind === "state" && String(rawState) === String(s0.state ?? "")) ||
-        (kind === "string" && matchString(rawState, String(s0.match || "contains"), String(s0.value || "")));
+        (kind === "numeric" && !Number.isNaN(sourceValueNum) && evalRuleThreshold(s0.rule, sourceValueNum)) ||
+        (kind === "state" && String(sourceRawState) === String(s0.state ?? "")) ||
+        (kind === "string" && matchString(sourceRawState, String(s0.match || "contains"), String(s0.value || "")));
 
       if (matched) {
         // Return a shallow copy with match metadata for overlays/debug UI.
         const s = { ...(s0 || {}) };
         s.__match_index = i;
         s.__match_kind = kind || String(s0?.kind || "");
+        s.__match_source = sourceEntity || "this lamp";
+        s.__match_raw_state = sourceRawState;
+        s.__match_value = sourceValueNum;
         if (s.name !== undefined && s.name !== null && String(s.name).trim() !== "") {
           s.__match_name = String(s.name).trim();
         }
@@ -509,6 +725,23 @@ if (lamp.invert === undefined) lamp.invert = false;
       }
     }
     return null;
+  };
+
+  const lampRuleDependencies = (item) => {
+    const deps = new Set();
+    (Array.isArray(item?.auto_styles) ? item.auto_styles : []).forEach((rule) => {
+      const source = autoRuleSourceEntity(rule);
+      if (source) deps.add(source);
+    });
+    return deps;
+  };
+
+  const lampDependsOnAny = (item, changedEntities) => {
+    if (!(changedEntities instanceof Set)) return true;
+    const own = String(item?.entity || "").trim();
+    if (own && changedEntities.has(own)) return true;
+    for (const dep of lampRuleDependencies(item)) if (changedEntities.has(dep)) return true;
+    return false;
   };
 
 
@@ -656,7 +889,15 @@ if (lamp.invert === undefined) lamp.invert = false;
       condition: legacyMainCondition(item),
       alert: { effect: resolveBaseAlertEffect(item), when: String(item.alert_when || item.blink_mode || "on"), acknowledgement: resolveBaseAlertEffect(item) ? "required" : "none" },
       changeAlert: { enabled: !!item.blink_on_change, condition: legacyChangeCondition(item), untilAck: !!item.blink_on_change_until_ack, seconds: clampNum(item.blink_on_change_seconds, 3), effect: String(item.alert_on_change_style || "inherit") },
-      appearance: { severity: String(item.severity || "status"), lampStyle: item.lamp_style || "inherit", lens: item.lens_type || "inherit", colors: { ...ensureObj(item.colors, {}) } },
+      appearance: { colorBehavior: normalizeColorBehavior(item.color_behavior), severity: String(item.severity || "status"), lampStyle: item.lamp_style || "inherit", lens: item.lens_type || "inherit", colors: { ...ensureObj(item.colors, {}) } },
+      interaction: {
+        tap: item.tap_action,
+        doubleTap: item.double_tap_action,
+        hold: item.hold_action,
+        tapTarget: interactionTargetEntity(item, "tap"),
+        doubleTapTarget: interactionTargetEntity(item, "double"),
+        holdTarget: interactionTargetEntity(item, "hold"),
+      },
       pairing: { id: String(item.pair_id || ""), position: String(item.pair_mode || "none") },
       rules: Array.isArray(item.auto_styles) ? item.auto_styles : [],
       legacy: item,
@@ -691,10 +932,15 @@ if (lamp.invert === undefined) lamp.invert = false;
       };
     }
 
-    const auto = item.enable_auto_styles ? pickAutoStyle(item, rawState, valueNum) : null;
+    const auto = item.enable_auto_styles ? pickAutoStyle(item, rawState, valueNum, options.states) : null;
     let isOn = matchesCondition(model.condition, rawState, valueNum);
     if (item.invert) isOn = !isOn;
-    if (item.always_on || options.lampTest || auto?.force_on) isOn = true;
+    if (item.always_on) isOn = true;
+    const forcedState = autoRuleForceState(auto);
+    if (forcedState === "on") isOn = true;
+    else if (forcedState === "off") isOn = false;
+    // Lamp Test intentionally has final authority so every populated window can be tested.
+    if (options.lampTest) isOn = true;
 
     let severity = String(item.severity || "status").toLowerCase();
     if (auto?.severity) severity = String(auto.severity).toLowerCase();
@@ -736,7 +982,7 @@ if (lamp.invert === undefined) lamp.invert = false;
     return {
       model, available: true, rawState, rawValueNum, valueNum, changed: !!options.changed,
       isOn, severity, auto,
-      autoOnColor: auto?.color ? String(auto.color).trim() : "",
+      autoOnColor: (auto?.color || auto?.on_color) ? String(auto.color || auto.on_color).trim() : "",
       alert: {
         active: !!effect, effect, reason, tuning, mainActive, changeActive,
         mainEffect, mainConditionMatched: !!(mainEffect && whenMatches), when
@@ -1071,7 +1317,12 @@ if (lamp.invert === undefined) lamp.invert = false;
     const groupHeight = 36;
     const gap = Math.max(0, Math.min(200, clampNum(cfg.cell_gap, 0)));
     const outer = Math.max(0, Math.min(200, clampNum(cfg.outer_frame, 6)));
-    const headerPx = String(cfg.title || "").trim() || cfg.show_reset_ack !== false ? 48 : 0;
+    const headerAck = headerAckButtons(cfg);
+    const interactiveHeader = panelMode(cfg) !== "presentation" && (
+      headerAck.ackAll || headerAck.clearAck ||
+      (!!cfg.show_header_toggle && !!String(cfg.header_toggle_entity || "").trim())
+    );
+    const headerPx = String(cfg.title || "").trim() || interactiveHeader ? 48 : 0;
     const visualRows = lampRows + groupRows;
     const heightPx = (lampRows * cellHeight) + (groupRows * groupHeight) + (Math.max(0, visualRows - 1) * gap) + (outer * 2) + headerPx;
     return { columns, renderColumns, physicalCells: blocks.length, rows: visualRows, lampRows, groupRows, heightPx };
@@ -1124,6 +1375,23 @@ if (lamp.invert === undefined) lamp.invert = false;
         }
       }
       if (Number.isInteger(slot) && slot > 0) seenSlot.add(slot);
+
+      if (lamp.entity) {
+        [["tap", "Tap"], ["double_tap", "Double tap"], ["hold", "Long press"]].forEach(([prefix, label]) => {
+          const fallback = prefix === "tap" ? "more_info" : "ack";
+          const action = normalizeInteractionAction(lamp[`${prefix}_action`], fallback);
+          if (interactionNeedsEntity(action) && lamp[`${prefix}_target`] === "entity" && !String(lamp[`${prefix}_entity`] || "").trim()) {
+            issues.push({ type: "interaction", index, message: `${label} uses Another entity but no target entity is selected.` });
+          }
+        });
+        if (lamp.enable_auto_styles && Array.isArray(lamp.auto_styles)) {
+          lamp.auto_styles.forEach((rule, ruleIndex) => {
+            if (autoRuleUsesExternalSource(rule) && !autoRuleSourceEntity(rule)) {
+              issues.push({ type: "rule", index, ruleIndex, message: `Rule ${ruleIndex + 1} uses Another entity but no source entity is selected.` });
+            }
+          });
+        }
+      }
     });
 
     const pairGroups = new Map();
@@ -1271,6 +1539,10 @@ if (lamp.invert === undefined) lamp.invert = false;
         type: "custom:annunciator-grid-card",
         config_version: CONFIG_VERSION,
         title: "",
+        // New cards show both panel-wide ACK controls. Legacy single-button
+        // fields remain readable at runtime for existing saved configurations.
+        show_ack_all: true,
+        show_clear_ack: true,
         show_reset_ack: true,
         reset_ack_label: "",
         reset_ack_action: "clear",
@@ -1307,22 +1579,38 @@ if (lamp.invert === undefined) lamp.invert = false;
         retro_warmup: true,
         severity_colors: {
           enabled: true,
-          trip: "#ff3a2f",
-          alarm: "#ffb000",
-          warn: "#ffd24a",
-          status: "#8bd66a",
-          frame: "#111111",
-          panel: "#2a2a2a",
-          text: "#1c1c1c",
-          /* Optional global text presets */
-          on_text: "rgba(0,0,0,0.85)",
+          on: BUILTIN_COLORS.on,
+          on_enabled: true,
+          off: BUILTIN_COLORS.off,
+          off_enabled: true,
+          status: BUILTIN_COLORS.status,
+          status_enabled: true,
+          warn: BUILTIN_COLORS.warn,
+          warn_enabled: true,
+          alarm: BUILTIN_COLORS.alarm,
+          alarm_enabled: true,
+          trip: BUILTIN_COLORS.trip,
+          trip_enabled: true,
+          unavailable: BUILTIN_COLORS.unavailable,
+          unavailable_enabled: true,
+          blank: BUILTIN_COLORS.blank,
+          blank_enabled: true,
+          frame: BUILTIN_COLORS.frame,
+          frame_enabled: false,
+          panel: BUILTIN_COLORS.panel,
+          panel_enabled: false,
+          text: BUILTIN_COLORS.text,
+          text_enabled: true,
+          on_text: BUILTIN_COLORS.on_text,
+          on_text_enabled: true,
+          off_text: BUILTIN_COLORS.off_text,
+          off_text_enabled: true,
+          unavailable_text: BUILTIN_COLORS.unavailable_text,
+          unavailable_text_enabled: true,
+          // Legacy-only global window override. Kept readable for old YAML but hidden
+          // from the simplified editor.
           on_window: "",
-
-          off_text: "#1c1c1c",
-          unavailable_text: "#1c1c1c",
-          unavailable: "#bdbdbd",
-          blank: "#111111",
-          off: "#f2f2f2",
+          on_window_enabled: true,
         },
         entities: [],
       };
@@ -1345,25 +1633,36 @@ if (lamp.invert === undefined) lamp.invert = false;
 
       const defaultSeverityColors = {
         enabled: true,
-        trip: "#ff3a2f",
-        alarm: "#ffb000",
-        warn: "#ffd24a",
-        status: "#8bd66a",
-        off: "#f2f2f2",
-        text: "#1c1c1c",
-        // Optional global text presets (can be overridden per-lamp)
-        on_text: "rgba(0,0,0,0.85)",
-        off_text: "#1c1c1c",
-        unavailable_text: "#1c1c1c",
-        unavailable: "#bdbdbd",
-        blank: "#111111",
-        frame: "#111111",
-        panel: "#2a2a2a",
+        on: BUILTIN_COLORS.on, on_enabled: true,
+        off: BUILTIN_COLORS.off, off_enabled: true,
+        status: BUILTIN_COLORS.status, status_enabled: true,
+        warn: BUILTIN_COLORS.warn, warn_enabled: true,
+        alarm: BUILTIN_COLORS.alarm, alarm_enabled: true,
+        trip: BUILTIN_COLORS.trip, trip_enabled: true,
+        unavailable: BUILTIN_COLORS.unavailable, unavailable_enabled: true,
+        blank: BUILTIN_COLORS.blank, blank_enabled: true,
+        frame: BUILTIN_COLORS.frame, frame_enabled: false,
+        panel: BUILTIN_COLORS.panel, panel_enabled: false,
+        text: BUILTIN_COLORS.text, text_enabled: true,
+        on_text: BUILTIN_COLORS.on_text, on_text_enabled: true,
+        off_text: BUILTIN_COLORS.off_text, off_text_enabled: true,
+        unavailable_text: BUILTIN_COLORS.unavailable_text, unavailable_text_enabled: true,
+        on_window: "", on_window_enabled: true,
       };
 
-      const incomingSeverity = config.severity_colors || config.colors || {};
+      const incomingSeverity = ensureObj(config.severity_colors || config.colors, {});
       const severity_colors = { ...defaultSeverityColors, ...incomingSeverity };
       if (severity_colors.enabled === undefined) severity_colors.enabled = true;
+      // Compatibility: old saved configurations that explicitly contain Frame/Panel
+      // colors keep those overrides. Minimal/new configs let the chosen theme own them.
+      if (!Object.prototype.hasOwnProperty.call(incomingSeverity, "frame_enabled")) {
+        severity_colors.frame_enabled = Object.prototype.hasOwnProperty.call(incomingSeverity, "frame");
+      }
+      if (!Object.prototype.hasOwnProperty.call(incomingSeverity, "panel_enabled")) {
+        severity_colors.panel_enabled = Object.prototype.hasOwnProperty.call(incomingSeverity, "panel");
+      }
+
+      const normalizedHeaderAck = headerAckButtons(config);
 
       // Runtime validates but never invents ephemeral identity. The visual editor persists UID/ACK-slot repairs.
       const validation = validateAndRepairConfig({ ...config, entities: normalizeEntities(config.entities) }, false);
@@ -1374,6 +1673,9 @@ if (lamp.invert === undefined) lamp.invert = false;
       this._config = {
         config_version: CONFIG_VERSION,
         title: "",
+        // Normalize legacy single-button configs before defaults are merged.
+        show_ack_all: normalizedHeaderAck.ackAll,
+        show_clear_ack: normalizedHeaderAck.clearAck,
         show_reset_ack: true,
         reset_ack_label: "",
         reset_ack_action: "clear",
@@ -1475,7 +1777,12 @@ if (lamp.invert === undefined) lamp.invert = false;
 
     _runtimeDependencies() {
       const deps = new Set();
-      (Array.isArray(this._config?.entities) ? this._config.entities : []).forEach((raw) => { const e=String(raw?.entity||"").trim(); if(e) deps.add(e); });
+      (Array.isArray(this._config?.entities) ? this._config.entities : []).forEach((raw) => {
+        const item = normalizeLamp(raw || {});
+        const e = String(item.entity || "").trim();
+        if (e) deps.add(e);
+        lampRuleDependencies(item).forEach((dep) => deps.add(dep));
+      });
       const lampTest = String(this._config?.lamp_test_entity || "").trim(); if (lampTest) deps.add(lampTest);
       const toggle = String(this._config?.header_toggle_entity || "").trim(); if (toggle) deps.add(toggle);
       const ackEnt = this._config?.ack_store?.type === "input_text" ? String(this._config?.ack_store?.entity || "").trim() : ""; if (ackEnt) deps.add(ackEnt);
@@ -1575,12 +1882,12 @@ _applyImperfections(el, item) {
   const ox = ((h & 0xff) / 255) * 18 - 9;          // -9..+9 %
   const oy = (((h >> 8) & 0xff) / 255) * 18 - 9;   // -9..+9 %
   const grain = 0.45 + (((h >> 16) & 0xff) / 255) * 0.35; // 0.45..0.80
-  const glare = 0.14 + (((h >> 24) & 0xff) / 255) * 0.18; // 0.14..0.32
+  const glareOffset = ((((h >> 24) & 0xff) / 255) * 0.10) - 0.05; // -0.05..+0.05
   try {
     el.style.setProperty("--hotspot-x", (35 + ox).toFixed(1) + "%");
     el.style.setProperty("--hotspot-y", (28 + oy).toFixed(1) + "%");
     el.style.setProperty("--lens-grain", grain.toFixed(3));
-    el.style.setProperty("--lens-glare", glare.toFixed(3));
+    el.style.setProperty("--lens-glare-offset", glareOffset.toFixed(3));
   } catch(e) {}
 }
 
@@ -1624,7 +1931,9 @@ _applyImperfections(el, item) {
           .headerRight {
             display:flex;
             align-items:center;
-            gap: 10px;
+            justify-content:flex-end;
+            gap: 6px;
+            flex-shrink:0;
           }
           .headerToggle {
             display:flex;
@@ -1644,27 +1953,30 @@ _applyImperfections(el, item) {
             font-size: 12px;
             font-weight: 800;
             letter-spacing: 0.02em;
+            white-space: nowrap;
           }
+          .headerBtn:hover { background: rgba(255,255,255,0.11); }
+          .headerBtn:active { transform: translateY(1px); }
 
           .panel {
             padding: 0;
-            background: var(--annun-panel, #2a2a2a);
-            border: 2px solid #0b0b0b;
+            background: var(--annun-panel, var(--panel-surface, #2a2a2a));
+            border: 2px solid var(--panel-edge, #0b0b0b);
             box-shadow:
-              inset 0 0 0 1px rgba(255,255,255,0.06),
-              0 10px 30px rgba(0,0,0,0.45);
+              inset 0 0 0 1px var(--panel-border, rgba(255,255,255,0.06)),
+              0 10px 30px var(--panel-shadow, rgba(0,0,0,0.45));
           }
 
           .grid {
             display: grid;
             gap: 0px;
-            background: var(--annun-frame, #111);
+            background: var(--annun-frame, var(--panel-frame, #111));
             padding: var(--annun-outer, 6px);
           }
 
           .cell {
             position: relative;
-            background: var(--annun-frame, #111);
+            background: var(--annun-frame, var(--panel-bezel, #111));
             padding: var(--annun-mullion, 6px);
             border-radius: var(--annun-radius, 12px);
             overflow: hidden;
@@ -1957,137 +2269,83 @@ opacity: calc(0.45 + (var(--lens-grain, 0.60) * 0.35));
 }
 
 
-/* === Lens types (applies to both Modern and Retro) === */
-/* Specular highlight (no big grey circle). Defaults are subtle and overridden by lens types. */
+/* === Lens materials (appearance only; state/color logic is independent) === */
 .cell .window::after,
 .pairHalf .window::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: var(--lens-glare, 0.18);
-  /* two angled streaks + a tiny corner glint */
-  background:
-    linear-gradient(135deg,
-      rgba(255,255,255,0.00) 0%,
-      rgba(255,255,255,0.10) 18%,
-      rgba(255,255,255,0.00) 32%,
-      rgba(255,255,255,0.00) 58%,
-      rgba(255,255,255,0.06) 70%,
-      rgba(255,255,255,0.00) 84%,
-      rgba(255,255,255,0.00) 100%),
-    radial-gradient(circle at 18% 16%,
-      rgba(255,255,255,0.20) 0%,
-      rgba(255,255,255,0.00) 42%);
+  opacity: clamp(0, calc(var(--lens-glare, 0.18) + var(--lens-glare-offset, 0)), 1);
 }
-/* Defaults */
-.lens-plastic { --lens-glare: 0.14; }
+.lens-plastic { --lens-glare: 0.20; }
+.lens-glass { --lens-glare: 0.54; }
+.lens-frosted { --lens-glare: 0.22; }
+.lens-smoked { --lens-glare: 0.16; }
 
-/* Plastic: soft sheen */
-.modern.lens-plastic .window::after { opacity: 0.16; }
-
-/* Glass: crisper, brighter highlights */
-.lens-glass { --lens-glare: 0.34; }
-.modern.lens-glass .window::after { opacity: 0.38; }
-.lens-glass .window {
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.08),
-    inset 0 2px 10px rgba(255,255,255,0.22),
-    inset 0 -12px 22px rgba(0,0,0,0.20);
+.modern.lens-plastic .window::after {
+  background: linear-gradient(135deg, transparent 0 25%, rgba(255,255,255,.14) 37%, transparent 52%), radial-gradient(circle at 18% 16%, rgba(255,255,255,.20), transparent 42%);
 }
+.modern.lens-plastic .window { box-shadow: inset 0 1px 2px rgba(255,255,255,.28), inset 0 -8px 15px rgba(0,0,0,.22); }
 
-/* Frosted: very diffused, almost no streaks */
-.lens-frosted { --lens-glare: 0.08; }
+.modern.lens-glass .window::after {
+  background: linear-gradient(150deg, rgba(255,255,255,.70) 0 9%, rgba(255,255,255,.20) 10% 24%, transparent 25% 56%, rgba(255,255,255,.22) 57% 67%, transparent 68%), linear-gradient(135deg, transparent 0 42%, rgba(255,255,255,.22) 43% 50%, transparent 51%);
+}
+.modern.lens-glass .window { box-shadow: inset 0 0 0 1px rgba(255,255,255,.26), inset 0 3px 12px rgba(255,255,255,.30), inset 0 -16px 24px rgba(0,0,0,.24), 0 1px 2px rgba(0,0,0,.45); }
+
 .modern.lens-frosted .window::after {
-  opacity: 0.10;
-  background: radial-gradient(circle at 50% 45%, rgba(255,255,255,0.16), rgba(255,255,255,0.00) 72%);
+  background: repeating-linear-gradient(96deg, rgba(255,255,255,.08) 0 1px, rgba(255,255,255,.015) 1px 3px), radial-gradient(circle at 45% 42%, rgba(255,255,255,.28), transparent 76%);
+  mix-blend-mode: screen;
 }
-.lens-frosted .window {
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.04),
-    inset 0 1px 8px rgba(255,255,255,0.12),
-    inset 0 -10px 18px rgba(0,0,0,0.18);
-}
+.modern.lens-frosted .window { box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 0 18px rgba(255,255,255,.18), inset 0 -9px 18px rgba(0,0,0,.18); filter: saturate(.88); }
 
-/* Smoked: darker lens overlay + restrained highlights */
-.lens-smoked { --lens-glare: 0.10; }
-.modern.lens-smoked .window::after { opacity: 0.12; }
 .modern.lens-smoked .window::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.06));
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.16));
   mix-blend-mode: multiply;
 }
-.lens-smoked .window {
-  box-shadow:
-    inset 0 0 0 999px rgba(0,0,0,0.12),
-    inset 0 2px 10px rgba(255,255,255,0.10),
-    inset 0 -14px 24px rgba(0,0,0,0.34);
-}
-
-.lens-smoked .window { box-shadow: inset 0 0 0 999px rgba(0,0,0,0.14), inset 0 2px 10px rgba(255,255,255,0.10), inset 0 -12px 18px rgba(0,0,0,0.30); }
-
+.modern.lens-smoked .window::after { background: linear-gradient(145deg, rgba(255,255,255,.16), transparent 32% 68%, rgba(255,255,255,.05)); }
+.modern.lens-smoked .window { box-shadow: inset 0 0 0 999px rgba(0,0,0,.22), inset 0 2px 9px rgba(255,255,255,.08), inset 0 -16px 26px rgba(0,0,0,.42); filter: brightness(.78) saturate(.88); }
 
 /* === Panel themes === */
-#grid.theme-classic { --panel-bg: #0f0f10; --panel-bezel: #1b1b1d; --panel-border: rgba(255,255,255,0.06); --panel-shadow: rgba(0,0,0,0.55); }
-#grid.theme-avionics { --panel-bg: #0b0c0d; --panel-bezel: #121315; --panel-border: rgba(255,255,255,0.10); --panel-shadow: rgba(0,0,0,0.70); }
-#grid.theme-neon { --panel-bg: #050607; --panel-bezel: #0b0c0d; --panel-border: rgba(255,255,255,0.10); --panel-shadow: rgba(0,0,0,0.85); }
-
-/* Apply panel vars */
-#grid {
-  background: var(--annun-frame, var(--panel-bg, #0f0f10));
+#grid.theme-classic, .panel.theme-classic {
+  --panel-frame: #101011; --panel-surface: #28282a; --panel-bezel: #1b1b1d;
+  --panel-border: rgba(255,255,255,.07); --panel-shadow: rgba(0,0,0,.58); --panel-edge: #090909;
 }
-.cell {
-  background: var(--panel-bezel, #1b1b1d);
-  border: 1px solid var(--panel-border, rgba(255,255,255,0.06));
-  box-shadow: 0 6px 18px var(--panel-shadow, rgba(0,0,0,0.55));
+#grid.theme-avionics, .panel.theme-avionics {
+  --panel-frame: #172027; --panel-surface: #202a31; --panel-bezel: #111a20;
+  --panel-border: rgba(137,190,214,.28); --panel-shadow: rgba(0,0,0,.72); --panel-edge: #31434d;
 }
-
-/* Theme-specific typography tweaks */
-#grid.theme-avionics .text { letter-spacing: 0.6px; }
-#grid.theme-neon .cell.on { box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 14px 34px rgba(0,0,0,0.80); }
-
+#grid.theme-neon, .panel.theme-neon {
+  --panel-frame: #0b0711; --panel-surface: #15101d; --panel-bezel: #100c17;
+  --panel-border: rgba(186,117,255,.28); --panel-shadow: rgba(0,0,0,.86); --panel-edge: #39204d;
+}
+#grid { background: var(--annun-frame, var(--panel-frame, #101011)); }
+.cell { background: var(--annun-frame, var(--panel-bezel, #1b1b1d)); border: 1px solid var(--panel-border, rgba(255,255,255,.07)); box-shadow: 0 6px 18px var(--panel-shadow, rgba(0,0,0,.58)); }
+#grid.theme-avionics .text { letter-spacing: .6px; }
+#grid.theme-avionics .cell { border-width: 1px; }
+#grid.theme-neon .cell { box-shadow: 0 0 0 1px var(--panel-border), 0 10px 28px var(--panel-shadow); }
+#grid.theme-neon .cell.on { box-shadow: 0 0 0 1px rgba(204,144,255,.34), 0 0 16px rgba(177,94,255,.12), 0 14px 34px rgba(0,0,0,.80); }
 
 @keyframes incFlicker {
-  0% { opacity: 0.92; }
-  18% { opacity: 0.98; }
-  37% { opacity: 0.90; }
-  56% { opacity: 1.00; }
-  74% { opacity: 0.94; }
-  100% { opacity: 0.97; }
+  0% { opacity: 0.92; } 18% { opacity: 0.98; } 37% { opacity: 0.90; }
+  56% { opacity: 1.00; } 74% { opacity: 0.94; } 100% { opacity: 0.97; }
 }
-
-/* Optional subtle flicker (panel config flicker: true) */
 #grid.flicker .cell.retro.on .window::before,
-#grid.flicker .pairHalf.retro.on .window::before {
-  animation: incFlicker 2.2s ease-in-out infinite;
-}
+#grid.flicker .pairHalf.retro.on .window::before { animation: incFlicker 2.2s ease-in-out infinite; }
 
+/* Retro keeps its incandescent hotspot but each material remains visibly distinct. */
+.retro.lens-plastic .window { box-shadow: inset 0 1px 3px rgba(255,255,255,.20), inset 0 -14px 24px rgba(0,0,0,.25); }
+.retro.lens-glass .window { box-shadow: inset 0 0 0 1px rgba(255,255,255,.20), inset 0 4px 13px rgba(255,255,255,.26), inset 0 -18px 30px rgba(0,0,0,.30); }
+.retro.lens-glass .window::after { opacity: clamp(.30, calc(.50 + var(--lens-glare-offset,0)), .72) !important; background: linear-gradient(150deg, rgba(255,255,255,.58), transparent 24% 58%, rgba(255,255,255,.18) 59% 68%, transparent 69%), radial-gradient(circle at 50% 50%, rgba(255,255,255,.14), transparent 62%); }
+.retro.lens-frosted .window { filter: saturate(.84); box-shadow: inset 0 0 0 1px rgba(255,255,255,.10), inset 0 0 22px rgba(255,255,255,.20), inset 0 -12px 24px rgba(0,0,0,.22); }
+.retro.lens-frosted .window::after { opacity: .56 !important; background: repeating-linear-gradient(94deg, rgba(255,255,255,.075) 0 1px, transparent 1px 3px), radial-gradient(circle at 50% 50%, rgba(255,255,255,.20), transparent 68%) !important; }
+.retro.lens-smoked .window { box-shadow: inset 0 0 0 999px rgba(0,0,0,.20), inset 0 3px 10px rgba(255,255,255,.08), inset 0 -20px 34px rgba(0,0,0,.44) !important; filter: brightness(.75) saturate(.82); }
 
-/* Retro lens tuning (keeps retro grain/bloom layers; avoids big streaks) */
-.retro.lens-glass.on .window,
-.retro.lens-glass.off .window {
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.10),
-    inset 0 3px 10px rgba(255,255,255,0.18),
-    inset 0 -14px 26px rgba(0,0,0,0.28),
-    0 0 0 rgba(0,0,0,0);
-}
-
-.retro.lens-frosted .window::after {
-  /* stronger diffusion in retro */
-  opacity: 0.38 !important;
-}
-
-.retro.lens-smoked.on .window,
-.retro.lens-smoked.off .window {
-  box-shadow:
-    inset 0 0 0 999px rgba(0,0,0,0.14),
-    inset 0 3px 10px rgba(255,255,255,0.10),
-    inset 0 -18px 32px rgba(0,0,0,0.38) !important;
-}
 
 </style>
 
@@ -2095,7 +2353,8 @@ opacity: calc(0.45 + (var(--lens-grain, 0.60) * 0.35));
           <div id="header" class="header" style="display:none;">
             <div id="title" class="title"></div>
             <div class="headerRight">
-              <button id="resetAckBtn" class="headerBtn" style="display:none;"></button>
+              <button id="ackAllBtn" class="headerBtn" style="display:none;" title="Acknowledge all currently active alerts" aria-label="ACK ALL">ACK ALL</button>
+              <button id="clearAckBtn" class="headerBtn" style="display:none;" title="Clear stored acknowledgements" aria-label="CLEAR ACK">CLEAR ACK</button>
               <div id="headerToggle" class="headerToggle" style="display:none;">
                 <div class="headerToggleLabel">Toggle</div>
                 <ha-switch id="toggleSwitch"></ha-switch>
@@ -2164,14 +2423,61 @@ opacity: calc(0.45 + (var(--lens-grain, 0.60) * 0.35));
       syncHeaderWidth(naturalWidth * scale);
     }
 
+    _interactionDescription(action) {
+      return ({
+        none: "None", more_info: "More Info", toggle: "Toggle", turn_on: "Turn On",
+        turn_off: "Turn Off", ack: "Acknowledge", clear_ack: "Clear ACK"
+      })[normalizeInteractionAction(action)] || "None";
+    }
+
+    async _executeLampInteraction(lampItem, gesture, allowAck, allowMoreInfo) {
+      const item = normalizeLamp(lampItem || {});
+      if (!item.entity) return;
+      const prefix = gesture === "double" ? "double_tap" : gesture === "hold" ? "hold" : "tap";
+      const fallback = gesture === "tap" ? "more_info" : "ack";
+      const action = normalizeInteractionAction(item[`${prefix}_action`], fallback);
+      if (action === "none") return;
+      const presentation = isPresentation(this._config);
+      const target = interactionTargetEntity(item, gesture);
+
+      if (action === "more_info") {
+        if (!allowMoreInfo || !target) return;
+        this._showMoreInfo(target);
+        return;
+      }
+      if (presentation) return;
+      if (action === "ack") {
+        if (allowAck) await this._toggleAck(item);
+        return;
+      }
+      if (action === "clear_ack") {
+        if (allowAck) await this._clearLampAck(item);
+        return;
+      }
+      if (!interactionNeedsEntity(action) || !target || !this._hass?.callService) return;
+      const service = action === "turn_on" ? "turn_on" : action === "turn_off" ? "turn_off" : "toggle";
+      try {
+        await this._hass.callService("homeassistant", service, { entity_id: target });
+      } catch (e) {
+        console.warn(`Lamp ${gesture} action failed:`, e);
+      }
+    }
+
     _wireLampInteraction(el, lampItem, allowAck, allowMoreInfo) {
-      const ent = String(lampItem?.entity || "").trim();
+      const item = normalizeLamp(lampItem || {});
+      const ent = String(item.entity || "").trim();
       if (!el || !ent) return;
-      if (!allowAck && !allowMoreInfo) {
+      const tapAction = normalizeInteractionAction(item.tap_action, "more_info");
+      const doubleAction = normalizeInteractionAction(item.double_tap_action, "ack");
+      const holdAction = normalizeInteractionAction(item.hold_action, "ack");
+      const usable = [tapAction, doubleAction, holdAction].some((action) => {
+        if (action === "none") return false;
+        if (action === "more_info") return !!allowMoreInfo;
+        return !isPresentation(this._config) && (action === "ack" || action === "clear_ack" ? !!allowAck : true);
+      });
+      if (!usable) {
         el.classList.remove("clickable");
-        el.removeAttribute("tabindex");
-        el.removeAttribute("role");
-        el.removeAttribute("aria-label");
+        el.removeAttribute("tabindex"); el.removeAttribute("role"); el.removeAttribute("aria-label");
         return;
       }
       if (el.dataset?.__wired === "1") return;
@@ -2179,34 +2485,70 @@ opacity: calc(0.45 + (var(--lens-grain, 0.60) * 0.35));
       el.classList.add("clickable");
       el.tabIndex = 0;
       el.setAttribute("role", "button");
-      const label = String(lampItem?.name_override || this._hass?.states?.[ent]?.attributes?.friendly_name || ent);
-      const actions = [allowMoreInfo ? "Enter for more info" : "", allowAck ? "Space or double-click to acknowledge" : ""].filter(Boolean).join("; ");
-      el.setAttribute("aria-label", `${label}${actions ? `. ${actions}.` : "."}`);
-      let clickTimer = null, pressTimer = null, startX = 0, startY = 0, pointerId = null, suppressClickUntil = 0;
+      const label = String(item.name_override || this._hass?.states?.[ent]?.attributes?.friendly_name || ent);
+      el.setAttribute("aria-label", `${label}. Tap: ${this._interactionDescription(tapAction)}. Double tap: ${this._interactionDescription(doubleAction)}. Long press: ${this._interactionDescription(holdAction)}. Keyboard: Enter tap; Space double tap; Shift+Space long press.`);
+
+      let tapTimer = null, pressTimer = null, suppressResetTimer = null;
+      let startX = 0, startY = 0, pointerId = null, suppressNextClick = false;
+      const TAP_DELAY = 285, HOLD_DELAY = 575, MOVE_TOLERANCE = 12;
+      const clearTap = () => { if (tapTimer) clearTimeout(tapTimer); tapTimer = null; };
       const cancelPress = () => { if (pressTimer) clearTimeout(pressTimer); pressTimer = null; pointerId = null; };
+      const run = (gesture) => {
+        if (!el.isConnected) return;
+        Promise.resolve(this._executeLampInteraction(item, gesture, allowAck, allowMoreInfo)).catch((e) => console.warn("Lamp interaction failed:", e));
+      };
+      const armSuppressionReset = () => {
+        if (suppressResetTimer) clearTimeout(suppressResetTimer);
+        suppressResetTimer = setTimeout(() => { suppressNextClick = false; suppressResetTimer = null; }, 1000);
+      };
+
       el.addEventListener("click", (e) => {
-        if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); return; }
-        if (clickTimer) clearTimeout(clickTimer);
-        clickTimer = setTimeout(() => { clickTimer = null; if (allowMoreInfo) this._showMoreInfo(ent); }, 250);
+        e.preventDefault(); e.stopPropagation();
+        if (suppressNextClick) {
+          suppressNextClick = false;
+          if (suppressResetTimer) clearTimeout(suppressResetTimer);
+          suppressResetTimer = null;
+          clearTap();
+          return;
+        }
+        if (tapTimer) {
+          clearTap();
+          run("double");
+          return;
+        }
+        tapTimer = setTimeout(() => { tapTimer = null; run("tap"); }, TAP_DELAY);
       });
-      el.addEventListener("dblclick", (e) => {
-        if (clickTimer) clearTimeout(clickTimer); clickTimer = null;
-        e.preventDefault(); e.stopPropagation(); if (allowAck) this._toggleAck(lampItem);
-      });
+      // The two click events above perform arbitration. Native dblclick is suppressed so
+      // it can never cause a second action on browsers that emit it after click #2.
+      el.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopPropagation(); });
       el.addEventListener("pointerdown", (e) => {
-        if (!allowAck || e.pointerType === "mouse") return;
+        if (e.isPrimary === false || (e.pointerType === "mouse" && e.button !== 0)) return;
+        cancelPress();
         startX = e.clientX; startY = e.clientY; pointerId = e.pointerId;
-        pressTimer = setTimeout(() => { pressTimer = null; suppressClickUntil = Date.now() + 650; this._toggleAck(lampItem); }, 550);
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          clearTap();
+          suppressNextClick = true;
+          run("hold");
+        }, HOLD_DELAY);
       });
       el.addEventListener("pointermove", (e) => {
         if (pointerId !== e.pointerId || !pressTimer) return;
-        if (Math.hypot(e.clientX - startX, e.clientY - startY) > 12) cancelPress();
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) > MOVE_TOLERANCE) cancelPress();
       });
-      el.addEventListener("pointerup", cancelPress);
-      el.addEventListener("pointercancel", cancelPress);
+      const release = () => {
+        cancelPress();
+        // Some touch browsers synthesize a click, others do not. Keep suppression just
+        // long enough for a synthesized click, then release it so the next real tap works.
+        if (suppressNextClick) armSuppressionReset();
+      };
+      el.addEventListener("pointerup", release);
+      el.addEventListener("pointercancel", release);
+      if (holdAction !== "none") el.addEventListener("contextmenu", (e) => { e.preventDefault(); e.stopPropagation(); });
       el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); if (allowMoreInfo) this._showMoreInfo(ent); }
-        if (e.key === " " || e.code === "Space") { e.preventDefault(); if (allowAck) this._toggleAck(lampItem); }
+        if (e.repeat) return;
+        if (e.key === "Enter") { e.preventDefault(); run("tap"); return; }
+        if (e.key === " " || e.code === "Space") { e.preventDefault(); run(e.shiftKey ? "hold" : "double"); }
       });
     }
 
@@ -2216,23 +2558,35 @@ opacity: calc(0.45 + (var(--lens-grain, 0.60) * 0.35));
       const titleEl = this.shadowRoot.getElementById("title");
       const toggleWrap = this.shadowRoot.getElementById("headerToggle");
       const sw = this.shadowRoot.getElementById("toggleSwitch");
-      const resetBtn = this.shadowRoot.getElementById("resetAckBtn");
+      const ackAllBtn = this.shadowRoot.getElementById("ackAllBtn");
+      const clearAckBtn = this.shadowRoot.getElementById("clearAckBtn");
 
       const hasTitle = !!String(cfg.title || "").trim();
       const mode = panelMode(cfg);
       const wantsToggle = mode !== "presentation" && !!cfg.show_header_toggle && !!String(cfg.header_toggle_entity || "").trim();
-      const wantsReset = mode !== "presentation" && cfg.show_reset_ack !== false;
+      const headerAck = headerAckButtons(cfg);
+      const wantsAckAll = mode !== "presentation" && headerAck.ackAll;
+      const wantsClearAck = mode !== "presentation" && headerAck.clearAck;
 
-      headerEl.style.display = hasTitle || wantsToggle || wantsReset ? "flex" : "none";
+      headerEl.style.display = hasTitle || wantsToggle || wantsAckAll || wantsClearAck ? "flex" : "none";
       titleEl.textContent = String(cfg.title || "");
 
-      resetBtn.style.display = wantsReset ? "inline-flex" : "none";
-      const action = String(cfg.reset_ack_action || "clear");
-      const defaultLabel = action === "clear" ? "Clear ACK" : "ACK All";
-      resetBtn.textContent = String(cfg.reset_ack_label || defaultLabel);
-      resetBtn.setAttribute("aria-label", resetBtn.textContent);
-      resetBtn.onclick = () => { if (panelMode(this._config) !== "presentation") this._resetAck(); };
-toggleWrap.style.display = wantsToggle ? "flex" : "none";
+      // Fixed labels keep the two panel-wide actions visually and verbally consistent.
+      // Legacy reset_ack_label is still accepted/stored for downgrade compatibility,
+      // but v1.0.2 deliberately standardizes the visible labels.
+      ackAllBtn.style.display = wantsAckAll ? "inline-flex" : "none";
+      ackAllBtn.textContent = "ACK ALL";
+      ackAllBtn.setAttribute("aria-label", "ACK ALL");
+      ackAllBtn.title = "Acknowledge all currently active alerts";
+      ackAllBtn.onclick = () => { if (panelMode(this._config) !== "presentation") this._ackAll(); };
+
+      clearAckBtn.style.display = wantsClearAck ? "inline-flex" : "none";
+      clearAckBtn.textContent = "CLEAR ACK";
+      clearAckBtn.setAttribute("aria-label", "CLEAR ACK");
+      clearAckBtn.title = "Clear stored acknowledgements";
+      clearAckBtn.onclick = () => { if (panelMode(this._config) !== "presentation") this._clearAcks(); };
+
+      toggleWrap.style.display = wantsToggle ? "flex" : "none";
       if (wantsToggle) {
         const s = this._hass?.states?.[cfg.header_toggle_entity]?.state;
         sw.checked = isTruthyState(s);
@@ -2249,14 +2603,18 @@ toggleWrap.style.display = wantsToggle ? "flex" : "none";
     _applyCssVars() {
       const cfg = this._config;
       const colors = ensureObj(cfg.severity_colors, {});
-      const enabled = colors.enabled !== false;
-
       const grid = this.shadowRoot.getElementById("grid");
-      grid.style.setProperty("--annun-frame", enabled ? (colors.frame || "#111") : "#111");
-      grid.style.setProperty("--annun-panel", enabled ? (colors.panel || "#2a2a2a") : "#2a2a2a");
-      grid.style.setProperty("--annun-text", enabled ? (colors.text || "#1c1c1c") : "#1c1c1c");
-      grid.style.setProperty("--annun-unavailable", enabled ? (colors.unavailable || "#bdbdbd") : "#bdbdbd");
-      grid.style.setProperty("--annun-off", enabled ? (colors.off || "#f2f2f2") : "#f2f2f2");
+      const panel = this.shadowRoot.getElementById("panelScale");
+      const setOptional = (el, cssName, key, fallback, defaultEnabled = true) => {
+        if (!el) return;
+        if (colorOverrideEnabled(colors, key, defaultEnabled)) el.style.setProperty(cssName, cleanColor(colors[key]) || fallback);
+        else el.style.removeProperty(cssName);
+      };
+      setOptional(grid, "--annun-frame", "frame", BUILTIN_COLORS.frame, false);
+      setOptional(panel, "--annun-panel", "panel", BUILTIN_COLORS.panel, false);
+      setOptional(grid, "--annun-text", "text", BUILTIN_COLORS.text);
+      setOptional(grid, "--annun-unavailable", "unavailable", BUILTIN_COLORS.unavailable);
+      setOptional(grid, "--annun-off", "off", BUILTIN_COLORS.off);
 
       grid.style.setProperty("--annun-mullion", `${Math.max(0, Math.min(100, clampNum(cfg.mullion, 6)))}px`);
       grid.style.setProperty("--annun-outer", `${Math.max(0, Math.min(200, clampNum(cfg.outer_frame, 6)))}px`);
@@ -2278,9 +2636,12 @@ toggleWrap.style.display = wantsToggle ? "flex" : "none";
         const g = this.shadowRoot.getElementById("grid");
         g?.classList.toggle("retroWarm", cfg.retro_warmup !== false);
         const th = String(cfg.panel_theme || "classic").toLowerCase();
-        g?.classList.toggle("theme-classic", th === "classic");
-        g?.classList.toggle("theme-avionics", th === "avionics");
-        g?.classList.toggle("theme-neon", th === "neon");
+        const panel = this.shadowRoot?.getElementById("panelScale");
+        [g, panel].filter(Boolean).forEach((node) => {
+          node.classList.toggle("theme-classic", th === "classic");
+          node.classList.toggle("theme-avionics", th === "avionics");
+          node.classList.toggle("theme-neon", th === "neon");
+        });
         g?.classList.toggle("flicker", !!cfg.flicker);
       } catch(e) {}
 
@@ -2500,11 +2861,6 @@ if (wrap.__type === "group_header") {
       this._applyHeader();
 
       const colors = ensureObj(cfg.severity_colors, {});
-      const globalEnabled = colors.enabled !== false;
-      const globalOffTextPreset = globalEnabled ? (colors.off_text || colors.text || "#1c1c1c") : "#1c1c1c";
-      const globalOnTextPreset = globalEnabled ? (colors.on_text || "rgba(0,0,0,0.85)") : "rgba(0,0,0,0.85)";
-      const globalUnavailableTextPreset = globalEnabled ? (colors.unavailable_text || colors.text || "#1c1c1c") : "#1c1c1c";
-      const globalOnWindowPreset = globalEnabled ? String(colors.on_window || "").trim() : "";
 
       const ackMap = await this._getAckMap();
       const ack = new AckManager(cfg.panel_id, ackMap);
@@ -2524,12 +2880,13 @@ if (wrap.__type === "group_header") {
         if (!item.entity) {
           cell.className = cell.className.replace(/\b(on|blink|pulse|wave|throb|heartbeat|flash|unavailable|acked|blinkchg)\b/g, "");
           cell.classList.add("off");
-          cell.style.background = globalEnabled ? (colors.blank || "#111111") : "#111111";
-          cell.style.color = globalEnabled ? (colors.blank || "#111111") : "#111111";
+          const blankColor = globalColorValue(colors, "blank", BUILTIN_COLORS.blank);
+          cell.style.background = blankColor;
+          cell.style.color = blankColor;
           primaryEl.textContent = ""; secondaryEl.textContent = "";
           if (tertiaryEl) { tertiaryEl.textContent = ""; tertiaryEl.style.display = "none"; }
           inopEl.hidden = true;
-          if (textEl) textEl.style.color = globalOffTextPreset;
+          if (textEl) textEl.style.color = globalColorValue(colors, "off_text", BUILTIN_COLORS.off_text);
           return;
         }
 
@@ -2590,6 +2947,7 @@ if (wrap.__type === "group_header") {
           changed,
           suppressAlerts: lampTest && !lampTestFull,
           forceAlert: lampTestFull,
+          states: this._hass?.states || {},
         });
 
         // Automatic rearm clears only after the alert condition has genuinely
@@ -2599,43 +2957,33 @@ if (wrap.__type === "group_header") {
           mainAcked = false;
           resolved = evaluateLampState(item, stateObj, {
             lampTest, acked: false, changeActive: lampTest ? false : changeActive, changeAcked, changed,
-            suppressAlerts: lampTest && !lampTestFull, forceAlert: lampTestFull,
+            suppressAlerts: lampTest && !lampTestFull, forceAlert: lampTestFull, states: this._hass?.states || {},
           });
         }
 
-        const useOverride = !!item.use_color_override;
-        const eColors = ensureObj(item.colors, {});
-        const lampUnavailableColor = useOverride && String(eColors.unavailable || "").trim() ? String(eColors.unavailable).trim() : "";
-        const lampUnavailableTextColor = useOverride && String(eColors.unavailable_text || "").trim() ? String(eColors.unavailable_text).trim() : "";
+        const visual = resolveLampColors(item, resolved, colors);
 
         cell.classList.remove("on", "off", "blink", "pulse", "wave", "throb", "heartbeat", "flash", "unavailable", "acked", "blinkchg");
 
         if (!resolved.available) {
           cell.classList.add("off", "unavailable");
-          const unavailableColor = lampUnavailableColor || (globalEnabled ? (colors.unavailable || "#bdbdbd") : "#bdbdbd");
-          cell.style.color = unavailableColor;
-          cell.style.setProperty("--lamp-unavailable", lampUnavailableColor);
-          cell.querySelectorAll(".window").forEach((w) => { w.style.backgroundColor = unavailableColor; });
+          cell.style.color = visual.unavailable;
+          cell.style.setProperty("--lamp-unavailable", visual.unavailable);
+          cell.querySelectorAll(".window").forEach((w) => { w.style.backgroundColor = visual.unavailable; });
           inopEl.hidden = false;
           inopEl.textContent = cfg.unavailable_text || "INOP";
           primaryEl.textContent = resolved.display.primary || item.entity;
           secondaryEl.textContent = "";
           if (tertiaryEl) { tertiaryEl.textContent = ""; tertiaryEl.style.display = "none"; }
-          if (textEl) textEl.style.color = lampUnavailableTextColor || globalUnavailableTextPreset;
+          if (textEl) textEl.style.color = visual.unavailableText;
           return;
         }
 
         inopEl.hidden = true;
         const severity = resolved.severity;
-        const lampOnColor = useOverride && String(eColors.on || "").trim() ? String(eColors.on).trim() : "";
-        const lampOffColor = useOverride && String(eColors.off || "").trim() ? String(eColors.off).trim() : "";
-        const lampOffTextColor = useOverride && String(eColors.text || "").trim() ? String(eColors.text).trim() : "";
-        const lampOnTextColor = useOverride && String(eColors.on_text || "").trim() ? String(eColors.on_text).trim() : "";
-        const lampOnWindowColor = useOverride && String(eColors.on_window || "").trim() ? String(eColors.on_window).trim() : "";
-        const onColor = resolved.autoOnColor || lampOnColor || (globalEnabled ? (colors[severity] || colors.status) : null) || "#8bd66a";
-        const offColor = lampOffColor || (globalEnabled ? colors.off : null) || "#f2f2f2";
-        const onWindowColor = lampOnWindowColor || globalOnWindowPreset || "";
-        const offTextColor = lampOffTextColor || globalOffTextPreset;
+        const onColor = visual.onColor;
+        const offColor = visual.offColor;
+        const onWindowColor = visual.onWindowColor;
 
         try { cell.style.setProperty("--lamp-off", offColor); } catch (_) {}
         const style = this._resolveLampStyle(item, severity);
@@ -2661,7 +3009,7 @@ if (wrap.__type === "group_header") {
           tertiaryEl.textContent = String(resolved.display.tertiary || "");
           tertiaryEl.style.display = resolved.display.tertiary ? "" : "none";
         }
-        if (textEl) textEl.style.color = resolved.isOn ? (lampOnTextColor || globalOnTextPreset) : offTextColor;
+        if (textEl) textEl.style.color = resolved.isOn ? visual.onText : visual.offText;
 
         // Optional history/debug overlay. It consumes the same resolved state as the renderer.
         const histCfg = cfg.history_overlay || {};
@@ -2676,6 +3024,9 @@ if (wrap.__type === "group_header") {
             info.setAttribute("aria-label", "Open lamp diagnostics");
             cell.appendChild(info);
           }
+          info.onpointerdown = (e) => e.stopPropagation();
+          info.onpointerup = (e) => e.stopPropagation();
+          info.onpointercancel = (e) => e.stopPropagation();
           info.onclick = (e) => {
             e.preventDefault(); e.stopPropagation();
             this._openHistoryOverlay(item, {
@@ -2701,11 +3052,11 @@ if (wrap.__type === "group_header") {
           const botItem = normalizeLamp(wrap.bottom?.lamp || {});
           const topCell = cell.querySelector('.pairHalf[data-half="top"]') || cell;
           const botCell = cell.querySelector('.pairHalf[data-half="bottom"]') || cell;
-          if (!filter || filter.has(topItem.entity)) updateLamp(topCell, topItem);
-          if (!filter || filter.has(botItem.entity)) updateLamp(botCell, botItem);
+          if (!filter || lampDependsOnAny(topItem, filter)) updateLamp(topCell, topItem);
+          if (!filter || lampDependsOnAny(botItem, filter)) updateLamp(botCell, botItem);
         } else {
           const lampItem = normalizeLamp(wrap.lamp || {});
-          if (!filter || filter.has(lampItem.entity)) updateLamp(cell, lampItem);
+          if (!filter || lampDependsOnAny(lampItem, filter)) updateLamp(cell, lampItem);
         }
       });
 
@@ -2858,6 +3209,7 @@ if (wrap.__type === "group_header") {
         acked: ack.isAcked(lamp, "main"),
         changeActive: !!this._changeActive?.[rid],
         changeAcked: ack.isAcked(lamp, "change"),
+        states: this._hass?.states || {},
       });
       const keys = ack.keys(lamp);
 
@@ -2936,10 +3288,10 @@ if (wrap.__type === "group_header") {
       this._histOverlayEl.focus();
     }
 
-    async _resetAck() {
+    async _resetAck(actionOverride = null) {
       if (isPresentation(this._config)) return;
       if (this._config.lamp_test_entity && this._isOn(this._config.lamp_test_entity)) return;
-      const action = String(this._config.reset_ack_action || "clear");
+      const action = String(actionOverride || this._config.reset_ack_action || "clear").toLowerCase();
       if (action === "clear") {
         const store = ensureObj(this._config.ack_store, { type: "local" });
         if (store.type === "input_text" && store.entity) {
@@ -2949,28 +3301,60 @@ if (wrap.__type === "group_header") {
           Object.keys(current || {}).forEach((k) => { if (!k.startsWith(prefix)) next[k] = current[k]; });
           await this._setAckMap(next);
         } else {
-          localStorage.removeItem(`annun_ack_map::${this._config.panel_id}`);
+          // Route local clear through the same storage abstraction as every other
+          // ACK write. This keeps optimistic/test storage and browser storage aligned.
+          await this._setAckMap({});
         }
-        // Clear ACK is a rearm operation. Active change events remain active;
+        // CLEAR ACK is a rearm operation. Active change events remain active;
         // ACK (not Clear) is what dismisses an until-ACK change event.
       } else {
+        // ACK ALL mirrors per-lamp ACK semantics: acknowledge only alert channels
+        // that are actually active. It never changes source entities and it does not
+        // pre-acknowledge inactive lamps.
         const map = await this._getAckMap();
         const ack = new AckManager(this._config.panel_id, map);
+        const lampTest = this._config.lamp_test_entity ? this._isOn(this._config.lamp_test_entity) : false;
         (Array.isArray(this._config.entities) ? this._config.entities : []).forEach((raw) => {
           const item = normalizeLamp(raw || {});
           if (!item.entity) return;
-          ack.acknowledge(item, "main");
-          ack.acknowledge(item, "change");
-          this._changeActive[lampRuntimeId(item)] = false;
+          ack.migrate(item);
+          const rid = lampRuntimeId(item);
+          const resolved = evaluateLampState(item, this._hass?.states?.[item.entity], {
+            lampTest,
+            acked: ack.isAcked(item, "main"),
+            changeActive: !!this._changeActive?.[rid],
+            changeAcked: ack.isAcked(item, "change"),
+            states: this._hass?.states || {},
+          });
+          const ackMain = !!resolved.alert.mainActive;
+          const ackChange = !!resolved.alert.changeActive;
+          if (ackMain) ack.acknowledge(item, "main");
+          if (ackChange) {
+            ack.acknowledge(item, "change");
+            this._changeActive[rid] = false;
+          }
+          if (this._config.pair_ack_lock && (ackMain || ackChange)) {
+            const partner = this._pairedPartner(item);
+            if (partner) {
+              if (ackMain) ack.acknowledge(partner, "main");
+              if (ackChange) {
+                ack.acknowledge(partner, "change");
+                this._changeActive[lampRuntimeId(partner)] = false;
+              }
+            }
+          }
         });
         await this._setAckMap(ack.map);
       }
       this._renderDynamic();
     }
 
+    async _ackAll() {
+      await this._resetAck("ack_all");
+    }
+
     async _clearAcks() {
-      this._config.reset_ack_action = "clear";
-      await this._resetAck();
+      await this._resetAck("clear");
     }
 
     async _ackGroup(groupName, acked, scopeOverride = null) {
@@ -3021,6 +3405,7 @@ if (wrap.__type === "group_header") {
           acked: ack.isAcked(item, "main"),
           changeActive,
           changeAcked: ack.isAcked(item, "change"),
+          states: this._hass?.states || {},
         });
         const ackedMainNow = !!resolved.alert.mainActive;
         const ackedChangeNow = !!(includeChange && resolved.alert.changeActive);
@@ -3069,6 +3454,7 @@ if (wrap.__type === "group_header") {
         acked: ack.isAcked(item, "main"),
         changeActive: changeIsActive,
         changeAcked: ack.isAcked(item, "change"),
+        states: this._hass?.states || {},
       });
 
       // A single operator ACK acknowledges every alert channel that is currently
@@ -3092,6 +3478,29 @@ if (wrap.__type === "group_header") {
         }
       }
 
+      await this._setAckMap(ack.map);
+      this._renderDynamic();
+    }
+
+    async _clearLampAck(itemOrEntity) {
+      if (isPresentation(this._config)) return;
+      if (this._config.lamp_test_entity && this._isOn(this._config.lamp_test_entity)) return;
+      const item = typeof itemOrEntity === "string" ? this._findLampByEntity(itemOrEntity) : normalizeLamp(itemOrEntity || {});
+      if (!item?.entity) return;
+      const map = await this._getAckMap();
+      const ack = new AckManager(this._config.panel_id, map);
+      ack.migrate(item);
+      ack.clear(item, "main");
+      ack.clear(item, "change");
+      this._changeActive[lampRuntimeId(item)] = false;
+      if (this._config.pair_ack_lock) {
+        const partner = this._pairedPartner(item);
+        if (partner) {
+          ack.clear(partner, "main");
+          ack.clear(partner, "change");
+          this._changeActive[lampRuntimeId(partner)] = false;
+        }
+      }
       await this._setAckMap(ack.map);
       this._renderDynamic();
     }
@@ -3135,12 +3544,27 @@ if (wrap.__type === "group_header") {
       if ((Number(this._nativeEditDepth) || 0) > 0 && this._config) return;
       const original = config || {};
       const cfg = migrateConfigV2(original);
-      const sevDefaults = { enabled:true, trip:"#ff3a2f", alarm:"#ffb000", warn:"#ffd24a", status:"#8bd66a", off:"#f2f2f2", on_text:"rgba(0,0,0,0.85)", off_text:"#1c1c1c", unavailable:"#bdbdbd", unavailable_text:"#1c1c1c", blank:"#111111", frame:"#111111", panel:"#2a2a2a" };
+      const sevDefaults = {
+        enabled:true,
+        on:BUILTIN_COLORS.on,on_enabled:true, off:BUILTIN_COLORS.off,off_enabled:true,
+        status:BUILTIN_COLORS.status,status_enabled:true, warn:BUILTIN_COLORS.warn,warn_enabled:true,
+        alarm:BUILTIN_COLORS.alarm,alarm_enabled:true, trip:BUILTIN_COLORS.trip,trip_enabled:true,
+        unavailable:BUILTIN_COLORS.unavailable,unavailable_enabled:true, blank:BUILTIN_COLORS.blank,blank_enabled:true,
+        frame:BUILTIN_COLORS.frame,frame_enabled:false, panel:BUILTIN_COLORS.panel,panel_enabled:false,
+        text:BUILTIN_COLORS.text,text_enabled:true, on_text:BUILTIN_COLORS.on_text,on_text_enabled:true,
+        off_text:BUILTIN_COLORS.off_text,off_text_enabled:true, unavailable_text:BUILTIN_COLORS.unavailable_text,unavailable_text_enabled:true,
+        on_window:"",on_window_enabled:true,
+      };
       const rawEntities = Array.isArray(cfg.entities) ? cfg.entities : [];
       const beforeIdentity = rawEntities.map((l) => `${l?.uid || l?.lamp_uid || ""}|${l?.ack_slot || ""}`).join("||");
       const validated = validateAndRepairConfig({ ...cfg, entities: rawEntities }, true);
       const vcfg = validated.config;
       const entities = vcfg.entities;
+      const incomingSev = ensureObj(vcfg.severity_colors || vcfg.colors, {});
+      const mergedSev = { ...sevDefaults, ...incomingSev };
+      const normalizedHeaderAck = headerAckButtons(vcfg);
+      if (!Object.prototype.hasOwnProperty.call(incomingSev, "frame_enabled")) mergedSev.frame_enabled = Object.prototype.hasOwnProperty.call(incomingSev, "frame");
+      if (!Object.prototype.hasOwnProperty.call(incomingSev, "panel_enabled")) mergedSev.panel_enabled = Object.prototype.hasOwnProperty.call(incomingSev, "panel");
       const afterIdentity = entities.map((l) => `${l?.uid || ""}|${l?.ack_slot || ""}`).join("||");
       const identityChanged = beforeIdentity !== afterIdentity;
       const migrationChanged = Number(original.config_version) !== CONFIG_VERSION || Number(original.next_ack_slot) !== Number(vcfg.next_ack_slot) || original.panel_sizing === undefined || original.lamp_test_mode === undefined;
@@ -3150,12 +3574,13 @@ if (wrap.__type === "group_header") {
         config_version:CONFIG_VERSION, title:"", panel_id:"annunciator_panel", panel_mode:"operator", columns:7, rows:3,
         cell_width:225, cell_height:160, cell_gap:0, mullion:6, outer_frame:6, cell_padding:10, row_mode:"auto", panel_sizing:"auto_fit",
         font_size:13, font_weight:"700", line_height:1.15, unavailable_text:"INOP",
+        show_ack_all:normalizedHeaderAck.ackAll, show_clear_ack:normalizedHeaderAck.clearAck,
         show_reset_ack:true, reset_ack_label:"", reset_ack_action:"clear",
         ack_store:{type:"local"}, lamp_test_entity:"", lamp_test_mode:"steady", pair_ack_lock:false, next_ack_slot:1,
         default_lamp_style:"modern", default_lens_type:"plastic", allow_lamp_style_override:true,
         allow_lens_override:true, retro_warmup:true, panel_theme:"classic", corner_style:"rounded", corner_radius:12,
-        severity_colors:{...sevDefaults, ...ensureObj(vcfg.severity_colors || vcfg.colors, {})}, entities,
-        ...vcfg, entities, severity_colors:{...sevDefaults, ...ensureObj(vcfg.severity_colors || vcfg.colors, {})}, config_version:CONFIG_VERSION,
+        severity_colors:mergedSev, entities,
+        ...vcfg, entities, severity_colors:mergedSev, config_version:CONFIG_VERSION,
       };
       if (this._selectedLamp >= entities.length) this._selectedLamp = Math.max(0, entities.length - 1);
       this._ensure();
@@ -3216,7 +3641,7 @@ if (wrap.__type === "group_header") {
           .validationBox.show{display:block}.validationTitle{font-weight:900;margin-bottom:5px}.validationList{margin:0;padding-left:18px}.validationActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
           button:disabled{opacity:.38;cursor:not-allowed}
           .editorIdentity{min-width:0;flex:1}.editorActions{flex:0 0 auto}
-          .tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:12px 0}
+          .tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:12px 0}
           .tab{width:100%;min-width:0;border:1px solid rgba(127,127,127,.22);background:transparent;color:var(--primary-text-color);border-radius:99px;padding:8px 8px;cursor:pointer;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
           .tab.active{background:color-mix(in srgb,var(--primary-color) 18%,transparent);border-color:var(--primary-color)}
           .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 14px;min-width:0}.full{grid-column:1/-1}
@@ -3401,6 +3826,13 @@ if (wrap.__type === "group_header") {
     }
 
     _set(key,val,immediate=false){this._config={...this._config,[key]:val};this._dispatch(immediate)}
+    _setHeaderAckButtons(ackAll,clearAck){
+      const a=!!ackAll,c=!!clearAck;
+      this._config={...this._config,show_ack_all:a,show_clear_ack:c,
+        // Keep a sensible legacy representation for users who temporarily downgrade.
+        show_reset_ack:a||c,reset_ack_action:c?"clear":"ack_all",reset_ack_label:""};
+      this._dispatch();
+    }
     _setNested(key,sub,val){this._config={...this._config,[key]:{...ensureObj(this._config[key],{}),[sub]:val}};this._dispatch()}
     _lamp(i=this._selectedLamp){return normalizeLamp((this._config.entities||[])[i]||{})}
     _indexByUid(uid){return (this._config.entities||[]).findIndex((x)=>String(x?.uid||x?.lamp_uid||"")===String(uid||""))}
@@ -3579,19 +4011,19 @@ if (wrap.__type === "group_header") {
       acts.append(up,down,dup,del);top.append(name,acts);host.append(top);
 
       // Spacer cells are intentionally simple. Selecting an entity converts the
-      // spacer into a normal alarm lamp and reveals the full editor.
+      // spacer into a normal status lamp and reveals the full editor.
       if(isSpacer){
         const pane=document.createElement("div");pane.className="spacerPane";
         pane.append(this._heading("Spacer cell","This position intentionally contains no entity. It still counts as a physical annunciator grid cell."));
         const notice=document.createElement("div");notice.className="spacerNotice";notice.innerHTML=`<strong>${escapeHtml(navMeta.label)}</strong> is currently an empty grid position.<br><span class="muted">Choose an entity below to convert it into a normal lamp. Move, duplicate, or delete it with the buttons above.</span>`;pane.append(notice);
-        pane.append(this._field("Convert to lamp",this._entity("",v=>{if(!v)return;const base={...normalizeLamp({uid:l.uid||makeLampUid(),ack_slot:l.ack_slot,entity:v,lamp_type:"alarm",severity:"alarm",alert_style:"blink",blink:true,ack_rearm:"auto",primary_mode:"name",secondary_mode:"state"})};const current=this._lamp();this._updateLamp({...base,uid:current.uid||base.uid,entity:v},true);this._page="setup";this._navFollowSelection=true;this._renderList();this._renderEditor()}),"Select an entity. Alarm defaults are applied; you can then change Lamp type in Setup.",true));
+        pane.append(this._field("Convert to lamp",this._entity("",v=>{if(!v)return;const base={...normalizeLamp({uid:l.uid||makeLampUid(),ack_slot:l.ack_slot,entity:v,lamp_type:"status",color_behavior:"standard",severity:"status",alert_style:"none",blink:false,pulse:false,ack_rearm:"auto",primary_mode:"name",secondary_mode:"state"})};const current=this._lamp();this._updateLamp({...base,uid:current.uid||base.uid,entity:v},true);this._page="setup";this._navFollowSelection=true;this._renderList();this._renderEditor()}),"Select an entity. New lamps use simple Standard ON/OFF colors with no alert by default.",true));
         host.append(pane);
         return;
       }
 
-      const tabs=document.createElement("div");tabs.className="tabs";["setup","display","behavior","appearance","rules","advanced"].forEach(p=>{const b=document.createElement("button");b.className=`tab${this._page===p?" active":""}`;b.textContent=p[0].toUpperCase()+p.slice(1);b.onclick=()=>{this._page=p;this._renderEditor()};tabs.append(b)});host.append(tabs);
+      const tabs=document.createElement("div");tabs.className="tabs";["setup","display","behavior","appearance","interaction","rules","advanced"].forEach(p=>{const b=document.createElement("button");b.className=`tab${this._page===p?" active":""}`;b.textContent=p[0].toUpperCase()+p.slice(1);b.onclick=()=>{this._page=p;this._renderEditor()};tabs.append(b)});host.append(tabs);
       const body=document.createElement("div");body.className="grid";host.append(body);
-      ({setup:()=>this._pageSetup(body,l),display:()=>this._pageDisplay(body,l),behavior:()=>this._pageBehavior(body,l),appearance:()=>this._pageAppearance(body,l),rules:()=>this._pageRules(body,l),advanced:()=>this._pageAdvanced(body,l)})[this._page]?.();
+      ({setup:()=>this._pageSetup(body,l),display:()=>this._pageDisplay(body,l),behavior:()=>this._pageBehavior(body,l),appearance:()=>this._pageAppearance(body,l),interaction:()=>this._pageInteraction(body,l),rules:()=>this._pageRules(body,l),advanced:()=>this._pageAdvanced(body,l)})[this._page]?.();
     }
 
     _pageSetup(body,l){
@@ -3599,10 +4031,11 @@ if (wrap.__type === "group_header") {
       body.append(this._field("Entity",this._entity(l.entity,v=>{if(!v){this._pushUndo("Lamp converted to spacer");this._breakPairForUid(l.uid,false);const idx=this._indexByUid(l.uid);if(idx>=0)this._selectedLamp=idx;this._updateLamp({entity:"",pair_id:"",pair_mode:"none"},true)}else this._updateLamp({entity:v},true);this._navFollowSelection=true;this._renderList();this._renderEditor()}),"Blank creates a spacer and safely breaks any pair.",true));
       if(!l.entity)return;
       const type=inferLampType(l);body.append(this._field("Lamp type",this._select(type,[["alarm","Alarm"],["status","Status"],["sensor","Sensor"],["custom","Custom"]],v=>{this._applyLampType(v);this._renderEditor();this._renderList()}),"Controls sensible defaults; it does not remove advanced capability.",true));
+      body.append(this._field("Color behavior",this._select(normalizeColorBehavior(l.color_behavior),[["standard","Standard ON/OFF"],["severity","Severity"],["custom","Custom ON/OFF"],...(normalizeColorBehavior(l.color_behavior)==="legacy"?[["legacy","Legacy compatibility"]]:[])],v=>{this._setLampColorBehavior(v);this._renderEditor()}),"Standard is simplest. Severity exposes Status/Warning/Alarm/Trip colors. Existing v1.x lamps remain Legacy until changed.",true));
       body.append(this._field("Label",this._text(l.name_override,(v)=>{this._updateLamp({name_override:v,label_source:v?"custom":"entity"});this._renderList()},"Entity friendly name"),"Leave blank to use the entity name.",true));
       body.append(this._field("Group",this._text(l.group,v=>this._updateLamp({group:v}),"e.g. Boiler"),"Optional group header / group ACK grouping.",true));
       if(type!=="sensor"||!l.always_on) this._conditionBuilder(body,l,"Lamp turns ON when",false);
-      body.append(this._field("Severity",this._select(l.severity||"status",[["status","Status"],["warn","Warning"],["alarm","Alarm"],["trip","Trip"]],v=>{this._updateLamp({severity:v});this._renderList()}),"Sets the default ON color.",false));
+      if(["severity","legacy"].includes(normalizeColorBehavior(l.color_behavior))) body.append(this._field("Severity",this._select(l.severity||"status",[["status","Status"],["warn","Warning"],["alarm","Alarm"],["trip","Trip"]],v=>{this._updateLamp({severity:v});this._renderList()}),"Used only by Severity/Legacy color behavior and conditional rules.",false));
       body.append(this._field("Alert",this._select(resolveBaseAlertEffect(l)||"none",[["none","None (steady)"],["blink","Blink until ACK"],["pulse","Pulse until ACK"],["wave","Wave until ACK"],["throb","Throb until ACK"],["heartbeat","Heartbeat until ACK"],["flash","Flash"]],v=>{this._updateLamp({alert_style:v,blink:v==="blink",pulse:v==="pulse"});this._renderList()}),"Advanced trigger/timing options are on Behavior.",false));
     }
 
@@ -3673,12 +4106,37 @@ if (wrap.__type === "group_header") {
       }
     }
 
+    _setLampColorBehavior(value) {
+      const l = this._lamp();
+      const next = normalizeColorBehavior(value);
+      if (next === "custom") {
+        const current = resolveLampColors(l, { severity:l.severity || "status", autoOnColor:"" }, this._config.severity_colors || {});
+        const colors = { ...ensureObj(l.colors, {}) };
+        if (normalizeColorBehavior(l.color_behavior) === "legacy") {
+          colors.on = cleanColor(colors.on_window) || cleanColor(colors.on) || current.onWindowColor;
+          colors.off = cleanColor(colors.off) || current.offColor;
+        } else if (cleanColor(colors.on_window)) colors.on = cleanColor(colors.on_window);
+        colors.on_window = "";
+        this._updateLamp({ color_behavior:"custom", use_color_override:true, colors });
+        return;
+      }
+      this._updateLamp({ color_behavior:next, use_color_override:next === "legacy" ? !!l.use_color_override : false });
+    }
+
     _pageAppearance(body,l){
-      body.append(this._heading("Appearance","Inherit the panel by default; override only what this lamp needs."));
-      body.append(this._field("Severity",this._select(l.severity||"status",[["status","Status"],["warn","Warning"],["alarm","Alarm"],["trip","Trip"]],v=>this._updateLamp({severity:v})),"",false));
+      body.append(this._heading("Appearance","Simple ON/OFF colors by default; severity and custom modes stay available when you need them."));
+      const behavior=normalizeColorBehavior(l.color_behavior);
+      const behaviorOpts=[["standard","Standard ON/OFF"],["severity","Severity"],["custom","Custom ON/OFF"]];
+      if(behavior==="legacy")behaviorOpts.push(["legacy","Legacy compatibility"]);
+      body.append(this._field("Color behavior",this._select(behavior,behaviorOpts,v=>{this._setLampColorBehavior(v);this._renderEditor()}),behavior==="legacy"?"This lamp preserves v1.x color precedence. Choose another mode when you are ready to simplify it.":"Standard uses global ON/OFF. Severity uses Status/Warning/Alarm/Trip while ON. Custom gives this lamp its own ON/OFF colors.",true));
+      if(behavior==="legacy"){const badge=document.createElement("div");badge.className="schemaBadge";badge.textContent="Legacy color compatibility is active";body.append(this._field("Compatibility",badge,"Existing ON Window / severity precedence is preserved until you choose Standard, Severity or Custom.",true))}
+      if(behavior==="severity"||behavior==="legacy") body.append(this._field("Severity",this._select(l.severity||"status",[["status","Status"],["warn","Warning"],["alarm","Alarm"],["trip","Trip"]],v=>this._updateLamp({severity:v})),"Controls the active color in Severity mode.",false));
+      if(behavior==="custom"){
+        const c=ensureObj(l.colors,{});
+        [["ON color","on"],["OFF color","off"],["ON text","on_text"],["OFF text","text"],["Unavailable","unavailable"],["Unavailable text","unavailable_text"]].forEach(([lab,key])=>body.append(this._color(lab,c[key]||"",v=>this._updateLampNested("colors",{[key]:v}))));
+      }
       const styleCtl=this._select(l.lamp_style||"inherit",[["inherit","Panel default"],["modern","Modern"],["retro","Retro"]],v=>this._updateLamp({lamp_style:v}));const styleLocked=this._config.allow_lamp_style_override===false;if(styleLocked){styleCtl.style.pointerEvents="none";styleCtl.style.opacity=".5";styleCtl.setAttribute("aria-disabled","true")}body.append(this._field("Lamp style",styleCtl,styleLocked?"Locked to Panel Settings → Appearance default.":"",false));
-      const lensCtl=this._select(l.lens_type||"inherit",[["inherit","Panel default"],["plastic","Plastic"],["glass","Glass"],["frosted","Frosted"],["smoked","Smoked"]],v=>this._updateLamp({lens_type:v}));const lensLocked=this._config.allow_lens_override===false;if(lensLocked){lensCtl.style.pointerEvents="none";lensCtl.style.opacity=".5";lensCtl.setAttribute("aria-disabled","true")}body.append(this._field("Lens",lensCtl,lensLocked?"Locked to Panel Settings → Appearance default.":"",false));
-      const sw=document.createElement("div");sw.className="switchLine";sw.append(this._switch(!!l.use_color_override,v=>{this._updateLamp({use_color_override:v});this._renderEditor()}),document.createTextNode("Override colors for this lamp"));body.append(this._field("Color overrides",sw,"Conditional-rule color still has highest priority.",true));if(l.use_color_override){const c=ensureObj(l.colors,{});[["ON color","on"],["ON window","on_window"],["ON text","on_text"],["OFF window","off"],["OFF text","text"],["Unavailable","unavailable"],["Unavailable text","unavailable_text"]].forEach(([lab,key])=>body.append(this._color(lab,c[key]||"",v=>this._updateLampNested("colors",{[key]:v}))))}
+      const lensCtl=this._select(l.lens_type||"inherit",[["inherit","Panel default"],["plastic","Plastic"],["glass","Glass"],["frosted","Frosted"],["smoked","Smoked"]],v=>this._updateLamp({lens_type:v}));const lensLocked=this._config.allow_lens_override===false;if(lensLocked){lensCtl.style.pointerEvents="none";lensCtl.style.opacity=".5";lensCtl.setAttribute("aria-disabled","true")}body.append(this._field("Lens material",lensCtl,lensLocked?"Locked to Panel Settings → Appearance default.":"Changes material/finish only; it does not change ON/OFF logic or severity.",false));
       body.append(this._field("Pair with lamp",this._pairSelector(l),"Paired halves are managed as one physical panel cell and kept adjacent automatically.",true));
       if(String(l.pair_mode||"none")!=="none")body.append(this._field("This half",this._select(l.pair_mode,[["top","Top"],["bottom","Bottom"]],v=>this._setPairPosition(l.uid,v)),"Changing one half automatically swaps its partner.",false));
     }
@@ -3694,17 +4152,43 @@ if (wrap.__type === "group_header") {
     _findPairPartner(l){const all=(this._config.entities||[]).map(normalizeLamp);const id=String(l?.pair_id||"");if(!id||!validPairIdsFor(all).has(id))return null;return all.find(x=>x.uid!==l.uid&&x.pair_id===id&&x.pair_mode!=="none")||null}
     _patchLampByUid(uid,patch,dispatch=true){const arr=(this._config.entities||[]).map(x=>{const l=normalizeLamp(x);return l.uid===uid?{...l,...patch}:l});this._config={...this._config,entities:arr};if(dispatch)this._dispatch()}
 
+    _interactionActionOptions(){return [["more_info","More Info"],["toggle","Toggle entity"],["turn_on","Turn On"],["turn_off","Turn Off"],["ack","Acknowledge"],["clear_ack","Clear ACK"],["none","None"]]}
+    _interactionEditor(body,l,prefix,label,tip){
+      const fallback=prefix==="tap"?"more_info":"ack";
+      const action=normalizeInteractionAction(l[`${prefix}_action`],fallback);
+      body.append(this._field(label,this._select(action,this._interactionActionOptions(),v=>{this._updateLamp({[`${prefix}_action`]:v});this._renderEditor()}),tip,true));
+      if(interactionNeedsEntity(action)){
+        const target=String(l[`${prefix}_target`]||"self")==="entity"?"entity":"self";
+        body.append(this._field(`${label} target`,this._select(target,[["self","This lamp entity"],["entity","Another entity"]],v=>{this._updateLamp({[`${prefix}_target`]:v});this._renderEditor()}),"More Info/control actions can operate a different entity than the one displayed by this lamp.",false));
+        if(target==="entity") body.append(this._field(`${label} entity`,this._entity(l[`${prefix}_entity`]||"",v=>this._updateLamp({[`${prefix}_entity`]:v})),"Required when Another entity is selected. Leaving it blank is a safe no-op.",true));
+      }
+    }
+    _pageInteraction(body,l){
+      body.append(this._heading("Interaction","Choose exactly what each gesture does. Gesture arbitration ensures one physical gesture executes one action."));
+      this._interactionEditor(body,l,"tap","Tap / short press","Default: More Info. Tap waits briefly so a double tap cannot accidentally execute both actions.");
+      this._interactionEditor(body,l,"double_tap","Double tap","Default: Acknowledge.");
+      this._interactionEditor(body,l,"hold","Long press","Default: Acknowledge. Works with touch, pen, and primary mouse press.");
+      const badge=document.createElement("div");badge.className="schemaBadge";badge.textContent="Keyboard: Enter = Tap · Space = Double tap · Shift+Space = Long press";body.append(this._field("Keyboard",badge,"With default actions, Space continues to ACK as before.",true));
+    }
+
     _pageRules(body,l){
       body.append(this._heading("Conditional rules","First matching rule wins. Reorder rules to make priority explicit."));const sw=document.createElement("div");sw.className="switchLine";sw.append(this._switch(!!l.enable_auto_styles,v=>{this._updateLamp({enable_auto_styles:v});this._renderEditor()}),document.createTextNode("Enable conditional rules"));body.append(this._field("Rules",sw,"",true));if(!l.enable_auto_styles)return;
       const rules=Array.isArray(l.auto_styles)?l.auto_styles:[];const add=document.createElement("button");add.textContent="+ Add rule";add.onclick=()=>{this._pushUndo("Conditional rule added");this._updateLamp({auto_styles:[...rules,{kind:"numeric",rule:{type:"above",a:0,b:0,inclusive:true}}]},true);this._renderEditor()};body.append(this._field("",add,"",true));
       rules.forEach((r,ri)=>{const box=document.createElement("details");box.className="rule full";box.open=true;const summary=document.createElement("summary");summary.textContent=this._ruleSummary(r,ri);box.append(summary);const bodyWrap=document.createElement("div");bodyWrap.className="ruleBody";const acts=document.createElement("div");acts.className="ruleActions";[["↑","Move rule up",()=>this._ruleMove(ri,-1),ri<=0],["↓","Move rule down",()=>this._ruleMove(ri,1),ri>=rules.length-1],["⧉","Duplicate rule",()=>this._ruleDuplicate(ri),false],["Delete","Delete rule",()=>this._ruleDelete(ri),false]].forEach(([txt,title,fn,disabled])=>{const b=document.createElement("button");b.type="button";b.textContent=txt;b.title=title;b.disabled=disabled;if(txt==="Delete")b.className="danger";b.onclick=(e)=>{e.preventDefault();fn()};acts.append(b)});bodyWrap.append(acts);const g=document.createElement("div");g.className="grid";bodyWrap.append(g);
-        g.append(this._field("Rule name",this._text(r.name||"",v=>this._rulePatch(ri,{name:v}),"Optional name"),"Shown in diagnostics.",true));g.append(this._field("WHEN",this._select(r.kind||"numeric",[["numeric","Numeric threshold"],["state","State equals"],["string","String match"]],v=>{this._rulePatch(ri,{kind:v});this._renderEditor()}),"",true));
+        g.append(this._field("Rule name",this._text(r.name||"",v=>this._rulePatch(ri,{name:v}),"Optional name"),"Shown in diagnostics.",true));
+        const sourceEntity=autoRuleSourceEntity(r);const sourceMode=(String(r.source||"").toLowerCase()==="entity"||sourceEntity)?"entity":"self";
+        g.append(this._field("Rule source",this._select(sourceMode,[["self","This lamp entity"],["entity","Another entity"]],v=>{this._rulePatch(ri,{source:v,source_entity:v==="self"?"":sourceEntity});this._renderEditor()}),"Rules can evaluate this lamp or any other Home Assistant entity.",true));
+        if(sourceMode==="entity")g.append(this._field("Source entity",this._entity(sourceEntity,v=>this._rulePatch(ri,{source:"entity",source_entity:v})),"State/numeric value used only for this rule. Numeric cross-entity rules use the source entity's raw numeric state.",true));
+        g.append(this._field("WHEN",this._select(r.kind||"numeric",[["numeric","Numeric threshold"],["state","State equals"],["string","String match"]],v=>{this._rulePatch(ri,{kind:v});this._renderEditor()}),"",true));
         if((r.kind||"numeric")==="numeric"){const rr=ensureObj(r.rule,{type:"above",a:0,b:0,inclusive:true});g.append(this._field("Comparison",this._select(rr.type||"above",[["above","Above"],["below","Below"],["between","Between"],["equal","Equal"]],v=>{this._ruleNested(ri,{type:v});this._renderEditor()}),"",false));g.append(this._field("Threshold",this._number(rr.a??0,v=>this._ruleNested(ri,{a:clampNum(v,0)})),"",false));if(rr.type==="between")g.append(this._field("Upper threshold",this._number(rr.b??0,v=>this._ruleNested(ri,{b:clampNum(v,0)})),"",false));if((rr.type||"above")!=="equal"){const inc=document.createElement("div");inc.className="switchLine";inc.append(this._switch(rr.inclusive!==false,v=>this._ruleNested(ri,{inclusive:v})),document.createTextNode("Include boundary"));g.append(this._field("Boundary",inc,"Controls ≥/≤ versus >/< behavior.",true))}}
         if(r.kind==="state")g.append(this._field("State equals",this._text(r.state||"",v=>this._rulePatch(ri,{state:v}),"on"),"",true));if(r.kind==="string"){g.append(this._field("Match",this._select(r.match||"contains",[["contains","Contains"],["equals","Equals"],["starts_with","Starts with"],["ends_with","Ends with"]],v=>this._rulePatch(ri,{match:v})),"",false));g.append(this._field("Text",this._text(r.value||"",v=>this._rulePatch(ri,{value:v}),"FAULT"),"",false))}
-        g.append(this._field("THEN severity",this._select(r.severity||"",[["","Inherit"],["status","Status"],["warn","Warning"],["alarm","Alarm"],["trip","Trip"]],v=>this._rulePatch(ri,{severity:v})),"",false));g.append(this._field("THEN alert",this._select(typeof r.alert==="string"?r.alert:"inherit",[["inherit","Inherit"],["off","Off"],["blink","Blink"],["pulse","Pulse"],["wave","Wave"],["throb","Throb"],["heartbeat","Heartbeat"],["flash","Flash"]],v=>this._rulePatch(ri,{alert:v==="inherit"?undefined:v,blink:undefined,pulse:undefined})),"",false));const fo=document.createElement("div");fo.className="switchLine";fo.append(this._switch(!!r.force_on,v=>this._rulePatch(ri,{force_on:v})),document.createTextNode("Force lamp ON"));g.append(this._field("Lamp state",fo,"",true));g.append(this._color("ON color",r.color||"",v=>this._rulePatch(ri,{color:v})));box.append(bodyWrap);body.append(box)
+        g.append(this._field("THEN severity",this._select(r.severity||"",[["","Inherit"],["status","Status"],["warn","Warning"],["alarm","Alarm"],["trip","Trip"]],v=>this._rulePatch(ri,{severity:v})),"Severity changes the lamp color only when its Color behavior is Severity or Legacy. Use ON color below for a direct rule color override.",false));g.append(this._field("THEN alert",this._select(typeof r.alert==="string"?r.alert:"inherit",[["inherit","Inherit"],["off","Off"],["blink","Blink"],["pulse","Pulse"],["wave","Wave"],["throb","Throb"],["heartbeat","Heartbeat"],["flash","Flash"]],v=>this._rulePatch(ri,{alert:v==="inherit"?undefined:v,blink:undefined,pulse:undefined})),"",false));
+        const forceState=autoRuleForceState(r);
+        g.append(this._field("Lamp state",this._select(forceState,[["inherit","Inherit"],["on","Force ON"],["off","Force OFF"]],v=>this._rulePatch(ri,{force_state:v==="inherit"?undefined:v,force_on:undefined,force_off:undefined})),"Applied after the lamp's normal condition/invert/Always ON. Lamp Test still has final authority.",true));
+        g.append(this._color("ON color",r.color||r.on_color||"",v=>this._rulePatch(ri,{color:v,on_color:undefined})));box.append(bodyWrap);body.append(box)
       })
     }
-    _ruleSummary(r,i){const kind=r.kind||"numeric";let when=kind;if(kind==="numeric"){const rr=ensureObj(r.rule,{}),inc=rr.inclusive!==false;when=rr.type==="above"?`${inc?"≥":">"} ${rr.a??0}`:rr.type==="below"?`${inc?"≤":"<"} ${rr.a??0}`:rr.type==="between"?`${inc?"between incl.":"between"} ${rr.a??0}–${rr.b??0}`:`= ${rr.a??0}`}if(kind==="state")when=`state = ${r.state||""}`;if(kind==="string")when=`${r.match||"contains"} ${r.value||""}`;const then=[r.severity&&`severity ${r.severity}`,r.force_on&&"force ON",r.alert&&`alert ${r.alert}`,r.color&&"custom color"].filter(Boolean).join(" · ")||"inherit appearance";return `${r.name||`Rule ${i+1}`}: ${when} → ${then}`}
+    _ruleSummary(r,i){const kind=r.kind||"numeric";let when=kind;if(kind==="numeric"){const rr=ensureObj(r.rule,{}),inc=rr.inclusive!==false;when=rr.type==="above"?`${inc?"≥":">"} ${rr.a??0}`:rr.type==="below"?`${inc?"≤":"<"} ${rr.a??0}`:rr.type==="between"?`${inc?"between incl.":"between"} ${rr.a??0}–${rr.b??0}`:`= ${rr.a??0}`}if(kind==="state")when=`state = ${r.state||""}`;if(kind==="string")when=`${r.match||"contains"} ${r.value||""}`;const source=autoRuleSourceEntity(r);const sourceMode=String(r.source||"").toLowerCase();if(source)when=`${source}: ${when}`;else if(sourceMode==="entity")when=`[select source entity]: ${when}`;const forced=autoRuleForceState(r);const then=[r.severity&&`severity ${r.severity}`,forced==="on"&&"force ON",forced==="off"&&"force OFF",r.alert&&`alert ${r.alert}`,(r.color||r.on_color)&&"custom color"].filter(Boolean).join(" · ")||"inherit appearance";return `${r.name||`Rule ${i+1}`}: ${when} → ${then}`}
     _rulePatch(i,patch){const rules=[...(this._lamp().auto_styles||[])];rules[i]={...ensureObj(rules[i],{}),...patch};this._updateLamp({auto_styles:rules})}
     _ruleNested(i,patch){const rules=[...(this._lamp().auto_styles||[])];const r=ensureObj(rules[i],{});rules[i]={...r,rule:{...ensureObj(r.rule,{}),...patch}};this._updateLamp({auto_styles:rules})}
     _ruleMove(i,delta){const rules=[...(this._lamp().auto_styles||[])],to=i+delta;if(to<0||to>=rules.length)return;this._pushUndo("Conditional rule moved");[rules[i],rules[to]]=[rules[to],rules[i]];this._updateLamp({auto_styles:rules},true);this._renderEditor()}
@@ -3715,11 +4199,11 @@ if (wrap.__type === "group_header") {
       body.append(this._heading("Advanced","Rare controls, diagnostics and maintenance options."));const always=document.createElement("div");always.className="switchLine";always.append(this._switch(!!l.always_on,v=>{this._updateLamp({always_on:v});this._renderList()}),document.createTextNode("Always ON"));body.append(this._field("Always ON",always,"Overrides the normal condition; useful for sensor windows.",true));const inv=document.createElement("div");inv.className="switchLine";inv.append(this._switch(!!l.invert,v=>this._updateLamp({invert:v})),document.createTextNode("Invert ON/OFF result"));body.append(this._field("Invert",inv,"Applied after condition evaluation.",true));body.append(this._field("Maintainer note",this._text(l.note||"",v=>this._updateLamp({note:v}),"Optional note"),"Never displayed on the panel.",true));
       const model=buildLampModel(l);const dbg=document.createElement("div");dbg.className="summaryBox full";dbg.textContent=`Schema v${CONFIG_VERSION} · Card ${CARD_VERSION} · UID: ${model.uid} · ACK slot: ${l.ack_slot || "-"} · Type: ${inferLampType(l)} · Rearm: ${l.ack_rearm || "manual"} · Condition: ${JSON.stringify(model.condition)}`;body.append(dbg);
       const copy=document.createElement("button");copy.textContent="Copy lamp config JSON";copy.onclick=()=>this._copyText(JSON.stringify(stripInternalKeys(l),null,2),copy,"Copy lamp config JSON");body.append(this._field("Lamp config",copy,"Useful for support or manual YAML work.",true));
-      const pkg=document.createElement("button");pkg.textContent="Copy diagnostic package";pkg.onclick=()=>{const state=this._hass?.states?.[l.entity]||null;const resolved=evaluateLampState(l,state,{acked:false,changeActive:false,changeAcked:false});const diagnostic={card_version:CARD_VERSION,config_version:CONFIG_VERSION,panel:{panel_id:this._config.panel_id,panel_mode:this._config.panel_mode,panel_sizing:this._config.panel_sizing,columns:this._config.columns},lamp:stripInternalKeys(l),state,resolved:{available:resolved.available,rawState:resolved.rawState,rawValueNum:resolved.rawValueNum,valueNum:resolved.valueNum,isOn:resolved.isOn,severity:resolved.severity,alert:resolved.alert,display:resolved.display}};this._copyText(JSON.stringify(diagnostic,null,2),pkg,"Copy diagnostic package")};body.append(this._field("Support package",pkg,"Copies card version, panel context, lamp config, entity state and resolved evaluation.",true));
+      const pkg=document.createElement("button");pkg.textContent="Copy diagnostic package";pkg.onclick=()=>{const state=this._hass?.states?.[l.entity]||null;const resolved=evaluateLampState(l,state,{acked:false,changeActive:false,changeAcked:false,states:this._hass?.states||{}});const diagnostic={card_version:CARD_VERSION,config_version:CONFIG_VERSION,panel:{panel_id:this._config.panel_id,panel_mode:this._config.panel_mode,panel_sizing:this._config.panel_sizing,columns:this._config.columns},lamp:stripInternalKeys(l),state,resolved:{available:resolved.available,rawState:resolved.rawState,rawValueNum:resolved.rawValueNum,valueNum:resolved.valueNum,isOn:resolved.isOn,severity:resolved.severity,alert:resolved.alert,display:resolved.display}};this._copyText(JSON.stringify(diagnostic,null,2),pkg,"Copy diagnostic package")};body.append(this._field("Support package",pkg,"Copies card version, panel context, lamp config, entity state and resolved evaluation.",true));
     }
     async _copyText(text,button,label){try{await navigator.clipboard.writeText(text);button.textContent="Copied";setTimeout(()=>button.textContent=label,1000)}catch(_){window.prompt("Copy:",text)}}
 
-    _applyLampType(type){const l=this._lamp();let patch={lamp_type:type};if(type==="alarm")patch={...patch,always_on:false,eval_mode:"toggle",severity:l.severity==="status"?"alarm":l.severity,alert_style:resolveBaseAlertEffect(l)||"blink",blink:!resolveBaseAlertEffect(l)||resolveBaseAlertEffect(l)==="blink",ack_rearm:"auto",primary_mode:l.primary_mode||"name",secondary_mode:l.secondary_mode||"state"};if(type==="status")patch={...patch,always_on:false,eval_mode:"toggle",severity:"status",alert_style:"none",blink:false,pulse:false};if(type==="sensor")patch={...patch,always_on:true,severity:"status",alert_style:"none",blink:false,pulse:false,primary_mode:"name",secondary_mode:"state"};this._updateLamp(patch)}
+    _applyLampType(type){const l=this._lamp();const behavior=normalizeColorBehavior(l.color_behavior);let patch={lamp_type:type};if(type==="alarm")patch={...patch,always_on:false,eval_mode:"toggle",color_behavior:behavior==="legacy"?"legacy":"severity",severity:l.severity==="status"?"alarm":l.severity,alert_style:resolveBaseAlertEffect(l)||"blink",blink:!resolveBaseAlertEffect(l)||resolveBaseAlertEffect(l)==="blink",ack_rearm:"auto",primary_mode:l.primary_mode||"name",secondary_mode:l.secondary_mode||"state"};if(type==="status")patch={...patch,always_on:false,eval_mode:"toggle",color_behavior:behavior==="legacy"?"legacy":"standard",severity:"status",alert_style:"none",blink:false,pulse:false};if(type==="sensor")patch={...patch,always_on:true,color_behavior:behavior==="legacy"?"legacy":"standard",severity:"status",alert_style:"none",blink:false,pulse:false,primary_mode:"name",secondary_mode:"state"};this._updateLamp(patch)}
 
     _renderPanel(){
       const host=this.shadowRoot.getElementById("panelBody");if(!host)return;host.innerHTML="";
@@ -3757,8 +4241,30 @@ if (wrap.__type === "group_header") {
         const lensOverride=document.createElement("div");lensOverride.className="switchLine";lensOverride.append(this._switch(c.allow_lens_override!==false,v=>this._set("allow_lens_override",v)),document.createTextNode("Allow per-lamp lens override"));g.append(this._field("Lens overrides",lensOverride,"",true));
         const imp=document.createElement("div");imp.className="switchLine";imp.append(this._switch(c.imperfections!==false,v=>this._set("imperfections",v)),document.createTextNode("Stable lens imperfections"));g.append(this._field("Lens realism",imp,"",false));
         const flick=document.createElement("div");flick.className="switchLine";flick.append(this._switch(!!c.flicker,v=>this._set("flicker",v)),document.createTextNode("Subtle retro flicker"));g.append(this._field("Flicker",flick,"",false));
-        const enabled=document.createElement("div");enabled.className="switchLine";enabled.append(this._switch(c.severity_colors?.enabled!==false,v=>this._setNested("severity_colors","enabled",v)),document.createTextNode("Use global severity colors"));g.append(this._field("Severity colors",enabled,"",true));
-        const sev=ensureObj(c.severity_colors,{});[["TRIP","trip"],["ALARM","alarm"],["WARN","warn"],["STATUS","status"],["OFF window","off"],["ON window","on_window"],["ON text","on_text"],["OFF text","off_text"],["Unavailable","unavailable"],["Unavailable text","unavailable_text"],["Blank spacer","blank"],["Frame","frame"],["Panel","panel"]].forEach(([lab,key])=>g.append(this._color(lab,sev[key]||"",v=>this._setNested("severity_colors",key,v))));
+        const sev=ensureObj(c.severity_colors,{});
+        const enabled=document.createElement("div");enabled.className="switchLine";enabled.append(this._switch(sev.enabled!==false,v=>{this._setNested("severity_colors","enabled",v);this._renderPanel()}),document.createTextNode("Enable global color overrides"));g.append(this._field("Global colors",enabled,"Individual choices are retained even when the master switch is off.",true));
+        const addGlobalColor=(label,key,fallback,tip="")=>{
+          const wrap=document.createElement("div");wrap.className="full";
+          const line=document.createElement("div");line.className="switchLine";line.append(this._switch(sev[`${key}_enabled`]!==false,v=>{this._setNested("severity_colors",`${key}_enabled`,v);this._renderPanel()}),document.createTextNode(`Override ${label}`));
+          wrap.append(this._field(label,line,tip,false));
+          const color=this._color(label,sev[key]||fallback,v=>this._setNested("severity_colors",key,v));
+          const active=sev.enabled!==false&&sev[`${key}_enabled`]!==false;
+          color.style.opacity=active?"1":".5";color.querySelectorAll("input").forEach((el)=>el.disabled=!active);
+          wrap.append(color);g.append(wrap);
+        };
+        g.append(this._heading("Standard ON/OFF","Used by new lamps and the simple default color behavior."));
+        addGlobalColor("ON / Active","on",BUILTIN_COLORS.on,"Normal ON color. Severity-mode lamps use their severity color instead.");
+        addGlobalColor("OFF / Inactive","off",BUILTIN_COLORS.off,"Normal OFF color for all modes unless a Custom lamp overrides it.");
+        addGlobalColor("Unavailable","unavailable",BUILTIN_COLORS.unavailable);
+        g.append(this._heading("Severity colors","Optional advanced colors used only by Severity/Legacy lamps and rules."));
+        [["STATUS","status",BUILTIN_COLORS.status],["WARN","warn",BUILTIN_COLORS.warn],["ALARM","alarm",BUILTIN_COLORS.alarm],["TRIP","trip",BUILTIN_COLORS.trip]].forEach(([lab,key,fallback])=>addGlobalColor(lab,key,fallback));
+        g.append(this._heading("Advanced global colors","Disable Frame/Panel overrides to let the selected panel theme own those surfaces."));
+        addGlobalColor("ON text","on_text",BUILTIN_COLORS.on_text);
+        addGlobalColor("OFF text","off_text",BUILTIN_COLORS.off_text);
+        addGlobalColor("Unavailable text","unavailable_text",BUILTIN_COLORS.unavailable_text);
+        addGlobalColor("Blank spacer","blank",BUILTIN_COLORS.blank);
+        addGlobalColor("Frame","frame",BUILTIN_COLORS.frame,"When disabled, Classic/Avionics/Neon controls the frame and bezel palette.");
+        addGlobalColor("Panel","panel",BUILTIN_COLORS.panel,"When disabled, Classic/Avionics/Neon controls the panel surface.");
         const sevApp=ensureObj(c.severity_appearance,{});
         ["trip","alarm","warn","status"].forEach((sevName)=>{const cur=ensureObj(sevApp[sevName],{});g.append(this._field(`${sevName.toUpperCase()} style`,this._select(cur.style||"",[["","Inherit panel"],["modern","Modern"],["retro","Retro"]],v=>this._set("severity_appearance",{...sevApp,[sevName]:{...cur,style:v}})),"Optional severity-based appearance.",false));g.append(this._field(`${sevName.toUpperCase()} lens`,this._select(cur.lens||"",[["","Inherit panel"],["plastic","Plastic"],["glass","Glass"],["frosted","Frosted"],["smoked","Smoked"]],v=>this._set("severity_appearance",{...sevApp,[sevName]:{...cur,lens:v}})),"",false))});
       }
@@ -3766,10 +4272,9 @@ if (wrap.__type === "group_header") {
       if(this._panelPage==="acknowledgement"){
         g.append(this._field("ACK storage",this._select(c.ack_store?.type||"local",[["local","Local browser"],["input_text","Persistent input_text"]],v=>{this._set("ack_store",v==="input_text"?{type:"input_text",entity:c.ack_store?.entity||"input_text.annunciator_ack_map"}:{type:"local"});this._renderPanel()}),"",true));
         if(c.ack_store?.type==="input_text") g.append(this._field("ACK input_text",this._entity(c.ack_store?.entity||"",v=>this._set("ack_store",{type:"input_text",entity:v})),"Stores adaptive compact ACK state: dense bitsets or sparse base36 slots, whichever is shorter.",true));
-        const show=document.createElement("div");show.className="switchLine";show.append(this._switch(c.show_reset_ack!==false,v=>this._set("show_reset_ack",v)),document.createTextNode("Show header ACK button"));g.append(this._field("Header button",show,"",true));
-        g.append(this._field("Button action",this._select(c.reset_ack_action||"clear",[["clear","Clear ACKs"],["ack_all","ACK all"]],v=>this._set("reset_ack_action",v)),"",false));
-        const autoAckLabel=(c.reset_ack_action||"clear")==="ack_all"?"ACK All":"Clear ACK";
-        g.append(this._field("Button label",this._text(c.reset_ack_label||"",v=>this._set("reset_ack_label",v),autoAckLabel),"Leave blank to follow the selected button action automatically.",false));
+        const hb=headerAckButtons(c);
+        const ackAll=document.createElement("div");ackAll.className="switchLine";ackAll.append(this._switch(hb.ackAll,v=>this._setHeaderAckButtons(v,hb.clearAck)),document.createTextNode("Show ACK ALL"));g.append(this._field("ACK ALL button",ackAll,"Acknowledges only alert channels that are currently active. It never changes the Home Assistant entity state.",true));
+        const clearAck=document.createElement("div");clearAck.className="switchLine";clearAck.append(this._switch(hb.clearAck,v=>this._setHeaderAckButtons(hb.ackAll,v)),document.createTextNode("Show CLEAR ACK"));g.append(this._field("CLEAR ACK button",clearAck,"Clears stored acknowledgements for this panel so applicable alerts can indicate again.",true));
         const pair=document.createElement("div");pair.className="switchLine";pair.append(this._switch(!!c.pair_ack_lock,v=>this._set("pair_ack_lock",v)),document.createTextNode("Linked ACK for paired lamps"));g.append(this._field("Pair ACK lock",pair,"ACKing either half also ACKs its partner.",true));
       }
 
@@ -3804,7 +4309,7 @@ if (wrap.__type === "group_header") {
       }
     }
 
-    _addLamp(){this._pushUndo("Lamp added");const slot=this._allocateAckSlot();const arr=[...(this._config.entities||[]),normalizeLamp({uid:makeLampUid(),ack_slot:slot,lamp_type:"alarm",severity:"alarm",alert_style:"blink",blink:true,ack_rearm:"auto",primary_mode:"name",secondary_mode:"state"})];this._config={...this._config,entities:arr};this._selectedLamp=arr.length-1;this._navFollowSelection=true;this._dispatch(true);this._renderAll()}
+    _addLamp(){this._pushUndo("Lamp added");const slot=this._allocateAckSlot();const arr=[...(this._config.entities||[]),normalizeLamp({uid:makeLampUid(),ack_slot:slot,lamp_type:"status",color_behavior:"standard",severity:"status",alert_style:"none",blink:false,pulse:false,ack_rearm:"auto",primary_mode:"name",secondary_mode:"state"})];this._config={...this._config,entities:arr};this._selectedLamp=arr.length-1;this._navFollowSelection=true;this._dispatch(true);this._renderAll()}
     _addSpacer(){this._pushUndo("Spacer added");const slot=this._allocateAckSlot();const arr=[...(this._config.entities||[]),normalizeLamp({uid:makeLampUid(),ack_slot:slot,entity:""})];this._config={...this._config,entities:arr};this._selectedLamp=arr.length-1;this._navFollowSelection=true;this._dispatch(true);this._renderAll()}
     _remove(){const current=this._lamp();if(!current.uid)return;this._pushUndo(current.entity?"Lamp deleted":"Spacer deleted");let arr=(this._config.entities||[]).map(normalizeLamp);const pid=String(current.pair_id||"");arr=arr.filter((x)=>x.uid!==current.uid).map((x)=>pid&&String(x.pair_id||"")===pid?{...x,pair_id:"",pair_mode:"none"}:x);arr=canonicalizePairOrdering(arr);this._config={...this._config,entities:arr};this._selectedLamp=Math.max(0,Math.min(this._selectedLamp,arr.length-1));this._navFollowSelection=true;this._dispatch(true);this._renderAll()}
     _duplicate(){const current=this._lamp();this._pushUndo(current.entity?"Lamp duplicated":"Spacer duplicated");const slot=this._allocateAckSlot();let arr=[...(this._config.entities||[])];const cp={...current,uid:makeLampUid(),ack_slot:slot,pair_id:"",pair_mode:"none"};arr.splice(this._selectedLamp+1,0,cp);this._config={...this._config,entities:arr};this._selectedLamp=arr.findIndex((x)=>x.uid===cp.uid);this._navFollowSelection=true;this._dispatch(true);this._renderAll()}
@@ -3832,6 +4337,9 @@ if (wrap.__type === "group_header") {
   if (typeof window !== "undefined" && window.__ANNUNCIATOR_TEST_MODE__) {
     window.__ANNUNCIATOR_TEST_API__ = {
       toNumber, applyValueTransform, resolveDisplayUnit, formatValueDisplay, matchesCondition, evalRuleThreshold,
+      pickAutoStyle, autoRuleSourceEntity, autoRuleUsesExternalSource, autoRuleForceState, lampRuleDependencies, lampDependsOnAny,
+      normalizeColorBehavior, colorOverrideEnabled, globalColorValue, resolveLampColors,
+      normalizeInteractionAction, interactionNeedsEntity, interactionTargetEntity, headerAckButtons,
       evaluateLampState, buildLampModel, inferLampType, AckManager, encodeCompactAckState,
       decodeCompactAckState, parseAckStateText, ackLayoutFingerprint, compactPanelToken, ackKeyHash, bitsetToHex, hexHasSlot, slotSetToAdaptive, adaptiveHasSlot, highestStoredAckSlot,
       validateAndRepairConfig, repairMalformedPairs, repairAllSafeConfig, validPairIdsFor, physicalBlocksFor, flattenPhysicalBlocks, canonicalizePairOrdering, computeOccupiedColumns, computePanelMetrics, migrateConfigV2, shouldTriggerChangeAlert, changeAlertDurationMs, shouldAutoRearm, normalizeLamp, normalizeEntities, AnnunciatorGridCard, AnnunciatorGridCardEditor

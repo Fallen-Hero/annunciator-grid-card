@@ -1,0 +1,11 @@
+# Simplest v1.0.2 lamp: ON = global ON color, OFF = global OFF color.
+type: custom:annunciator-grid-card
+title: Simple Status
+entities:
+  - entity: light.porch
+    lamp_type: status
+    color_behavior: standard
+    eval_mode: toggle
+    alert_style: none
+    primary_mode: name
+    secondary_mode: state
