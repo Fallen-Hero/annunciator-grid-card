@@ -1,4 +1,4 @@
-# Annunciator Grid Card v1.0.2 — Troubleshooting
+# Annunciator Grid Card v1.1.0 — Troubleshooting
 
 Use this page for common installation, rendering, color, ACK, rule, interaction, and editor problems. For configuration details, see [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md). For feature explanations, see [USER_GUIDE.md](USER_GUIDE.md).
 
@@ -15,9 +15,9 @@ Use this page for common installation, rendering, color, ACK, rule, interaction,
 
 Check:
 
-- HACS finished downloading the card.
+- HACS finished downloading the card or the release file was copied successfully.
 - The Lovelace resource is a JavaScript Module.
-- Manual resource path is `/local/annunciator-grid-card.js` if the file is under `<config>/www/`.
+- The resource URL matches the filename under `<config>/www/`; a manual installation normally uses `/local/annunciator-grid-card.js`.
 - The browser has been refreshed after installation.
 - You do not have stale duplicate resources loading old and new versions.
 
@@ -29,18 +29,18 @@ resources:
     type: module
 ```
 
-## HACS shows old README or old version information
+## HACS or a manual installation shows old version information
 
-GitHub/HACS/browser caches can lag behind repository changes.
+Browser and Home Assistant frontend caches can keep an older resource active.
 
-- Confirm the GitHub release/tag is correct.
-- Confirm `VERSION`, `package.json`, and `dist/annunciator-grid-card.js` agree.
-- Refresh HACS/repository information.
+- Confirm the installed GitHub release/tag or refresh the HACS repository information.
+- Disable duplicate HACS/manual resources so only one URL registers the custom element.
+- For a manual installation, change a resource cache token such as `?v=1.1.0` after replacing the file.
 - Hard-refresh the browser.
 
 ## New lamp is amber/alarm-colored when I expected green
 
-A new v1.0.2 lamp should normally use **Standard ON/OFF** and green ON.
+A new lamp should normally use **Standard ON/OFF** and green ON.
 
 If a lamp is amber/red/yellow:
 
@@ -54,7 +54,7 @@ If a lamp is amber/red/yellow:
 
 That is the normal v1.0.2 Standard OFF default (`#f2f2f2`). OFF does not automatically mean an alarm/fault.
 
-Change **Panel Settings → Appearance → OFF / Inactive** if your panel needs another color, or use Custom ON/OFF for one lamp.
+Change **Panel settings → Appearance → OFF / Inactive** if your panel needs another color, or use Custom ON/OFF for one lamp.
 
 ## Per-lamp ON color seems to do nothing
 
@@ -81,7 +81,7 @@ When converting a legacy lamp to Custom, v1.0.2 preserves the old visually effec
 
 ## Panel theme does not look different
 
-Check **Panel Settings → Appearance**.
+Check **Panel settings → Appearance**.
 
 If **Frame** or **Panel** global color overrides are enabled, they intentionally override theme surface colors. Disable those overrides to let Classic/Avionics/Neon own the panel surfaces.
 
@@ -100,7 +100,7 @@ The material changes finish/optics, not the logical state/color. Compare the sam
 
 ## Standalone lamp color differs from a paired lamp
 
-v1.0.2 includes a specific fix and regression tests for standalone/paired active-color parity.
+Standalone and paired active-color parity is covered by dedicated regression tests.
 
 If you can reproduce a difference:
 
@@ -109,23 +109,23 @@ If you can reproduce a difference:
 3. Copy each lamp's diagnostic package.
 4. Include the card version and screenshots in the GitHub issue.
 
-## ACK ALL is missing
+## ACKNOWLEDGE is missing
 
-Open **Panel Settings → Acknowledgement** and enable **Show ACK ALL**.
+Open **Panel settings → Acknowledgement → Header controls** and enable **Show ACKNOWLEDGE**.
 
-Compatibility note: an existing v1.x Clear-only header configuration remains Clear-only until you change the new v1.0.2 toggles. A minimal old config with no old header keys also keeps the historical Clear-only default.
+Compatibility note: an existing v1.x Clear-only header configuration remains Clear-only until you change the v1.1 header controls. Existing ACK ALL/CLEAR ACK visibility and labels are preserved during migration.
 
-New cards created through the v1.0.2 visual editor default to both ACK ALL and CLEAR ACK.
+New v1.1 cards enable ACKNOWLEDGE and CLEAR ACKNOWLEDGED by default. SILENCE, RESET, and LAMP TEST remain optional.
 
-## CLEAR ACK is missing
+## CLEAR ACKNOWLEDGED is missing
 
-Open **Panel Settings → Acknowledgement** and enable **Show CLEAR ACK**.
+Open **Panel settings → Acknowledgement → Header controls** and enable **Show CLEAR ACKNOWLEDGED**.
 
-If the panel is in Presentation mode, both header ACK controls are intentionally hidden.
+If the panel is in Presentation mode, header controls are intentionally hidden.
 
-## ACK ALL does not ACK every lamp
+## ACKNOWLEDGE does not ACK every lamp
 
-That is intentional. **ACK ALL means acknowledge all currently active alert channels**, not “pre-ACK every configured lamp.”
+That is intentional. **ACKNOWLEDGE means acknowledge all currently active alert channels**, not “pre-ACK every configured lamp.” Legacy panels may display the same action as ACK ALL.
 
 A lamp is not ACKed when:
 
@@ -137,9 +137,73 @@ A lamp is not ACKed when:
 
 This design prevents inactive future alarms from being silently pre-acknowledged.
 
-## CLEAR ACK makes an active alarm start blinking again
+## CLEAR ACKNOWLEDGED makes an active alarm start blinking again
 
-That is expected. CLEAR ACK removes stored acknowledgement. If the underlying alert condition is still active, the alert becomes eligible to indicate again immediately.
+That is expected. CLEAR ACKNOWLEDGED removes stored acknowledgement. If the underlying alert condition is still active, the alert becomes eligible to indicate again immediately.
+
+## Manual or Automatic ACK rearm seems wrong
+
+Check both levels:
+
+1. **Panel settings → Acknowledgement → Default ACK rearm** sets the panel default.
+2. **Lamp → Behavior → ACK rearm** can use the panel default or explicitly override it.
+
+Manual keeps ACK stored after the source returns to normal until Clear ACK/CLEAR ACKNOWLEDGED. Automatic keeps ACK while the configured alert condition remains active, then clears it after the condition becomes normal. This is condition-based and also applies when Alert effect is None. Unknown/unavailable never clears the ACK. **Alert when → ON or OFF** is always eligible, so it has no automatic normal state.
+
+Existing v1.0.2 lamps remain explicit Manual unless changed. New lamps use **Use panel default**.
+
+## Spacer will not disappear into the panel
+
+Select the spacer, set **Appearance → Blend into panel (transparent gap)**, or make that the panel's **Spacer default** and leave the spacer on **Use panel default**. Blend suppresses the lens, frame/bezel, border, glare, and shadow. Compatibility intentionally retains the old visible spacer; Custom intentionally renders the selected Spacer fill, Spacer frame / bezel, Spacer border, and Spacer border width.
+
+If only one spacer layer should disappear, choose **Custom fill / frame / border** and enable **No spacer fill**, **No spacer frame / bezel**, or **No spacer border** independently. A per-spacer Custom choice overrides the panel default.
+
+## A surface still looks framed after choosing None
+
+Open **Panel settings → Appearance → Quick appearance** and identify the separate layer that is still visible:
+
+- **No panel frame** removes the grid surround, while **No panel border** removes the outside panel edge/shadow.
+- **No lamp bezels** removes the area around the lenses, while **No lens borders** removes the line directly on the lenses.
+- Header background/border and header button background/border each have their own None switch.
+- Spacer layers are intentionally independent from lamp-layer switches; use the spacer's Blend or Custom controls.
+
+None switches retain saved colors. If a surface returns after switching None off, that is the previous theme or custom override being restored.
+
+## Panel & frames opens without color controls
+
+This means some or all corresponding surfaces are disabled under **Quick appearance**. The editor now names the disabled layers inside **Panel & frames**; when every layer is disabled it shows **Edit visibility**. Select that button to reopen **Quick appearance**, then turn off the relevant **No...** switch before editing its color or source. The saved color was not deleted.
+
+## An inactive lamp is unexpectedly dim or bright
+
+Check **Panel settings → Appearance → Lamp lighting → Brightness profile** first, then inspect the **OFF · ON · ALERT** preview. Normal is 100/100/100. Dim OFF, Dim ON, Dim non-alert, and Dim all apply **Dim level** to the named states; Custom uses independent **OFF brightness**, **ON brightness**, and **Alert brightness**. Canonical Dim level and custom levels accept 10–100%, with Dim level defaulting to 32%.
+
+For one lamp, open its Quick/Full editor or **Appearance → Lens & light → Brightness**. **Inherit** uses the panel profile; another selection replaces it only for that lamp. In Bulk edit, **Brightness** is staged and does nothing until Apply. INOP and Lamp Test force 100%. An active main alarm condition—including `Alert when: Lamp OFF`—or change alert uses Alert brightness even after ACK; ordinary lamps then use their resolved final ON or OFF level. Paired halves resolve independently.
+
+If YAML still uses the old settings, an explicit `lamp_brightness` object wins. Otherwise `inactive_lamp_default: normal|dim` maps to profile `normal|dim_off`, `inactive_lamp_brightness` maps to Dim level through the old 10–90 range, and per-lamp `inactive_lamp_mode: inherit|normal|dim` maps to `inherit|normal|dim_off`. Opening the editor or preview does not rewrite those aliases.
+
+## An appearance preset changed more than expected
+
+Appearance presets are limited to panel-wide visual choices. They do not contain entities, per-lamp overrides, alarm output, ACK policy/state, header controls, interactions, rules, or layout. If one of those changed, use the editor's Undo immediately and inspect the surrounding Home Assistant dashboard edit history; the preset apply path does not write those keys. **Update** overwrites the selected preset with the current appearance, whereas **Apply** changes the current look to the selected saved values.
+
+Lamp appearance presets are a separate library. They can change color behavior/custom colors, font, icon size/color, shape, illumination, style, lens, and the per-lamp brightness profile. They cannot change entity/source identity, display text, icon identity, lamp type/severity, alarm/ACK behavior, rules, actions, group, pair, or span. If the result is visually unexpected, use Undo and confirm that the selected item came from **Lamp appearance presets**, not the panel-wide **Appearance presets** library.
+
+### My lamp should say ACTIVE when ON and TRIP when OFF
+
+Open **Full editor → Display**, set the desired Primary, Secondary, or Tertiary selector to **ON / OFF labels**, and enter **ON text: ACTIVE** and **OFF text: TRIP**. This follows the final logical state after conditions, invert, Force ON/OFF rules, and Lamp Test. Use **Dynamic text rules** only when you need thresholds, source-state/string checks, availability, ACK, or active-alarm conditions. Rules are ordered; move the most specific match above broader ones because the first enabled match wins.
+
+If a Dynamic line shows its fallback during an unavailable state, that fallback intentionally does not hide INOP. Add an explicit **Unavailable / missing** or **Unknown** rule, or use ON / OFF labels and customize **Unavailable text** / **Unknown text**, when you want to replace the INOP wording.
+
+### My ON/OFF icon colors do not change
+
+In **Full editor → Display**, Content must be Icon only or Icon + selected lines. Set **Icon color** to **Separate ON / OFF colors**, then set both color values. The selection follows the same final logical state as the lamp, not merely the raw entity string. Unavailable icons intentionally use the unavailable text color. Old configurations with the former override switch appear as **One custom color** and remain unchanged.
+
+## Quick setup is missing an advanced option
+
+Choose **Full editor** above the selected lamp. Quick setup intentionally shows only common fields; Display, Interaction, Rules, pairing, span, detailed alert tuning, and diagnostics remain in Full editor. Switching editor mode does not change or save configuration.
+
+## Bulk edit changed both halves of a pair
+
+Expected. Selecting either half of a valid pair expands the bulk selection to both halves so Group, visual style, and other common settings remain pair-safe. Bulk values are staged: opening Bulk edit or changing a selector does nothing until its adjacent **Apply** button is selected. One Apply is one undoable operation.
 
 ## ACK does not change the entity state
 
@@ -156,6 +220,8 @@ To control an entity, configure Tap/Double tap/Long press as:
 Local browser storage is per browser/device.
 
 For shared ACK state, create an `input_text` helper and configure **Persistent input_text** storage.
+
+The helper shares annunciator acknowledgement, not the underlying entity state. The browser still performs the helper service call and needs connectivity and permission; a failed persistent write can fall back locally.
 
 ## Persistent ACK seems delayed
 
@@ -236,6 +302,8 @@ Check:
 
 v1.0.2 tracks external rule dependencies so a source-entity state change reevaluates dependent lamps.
 
+Open **Full editor → Rules → Live rule trace** and refresh it. The trace uses the runtime condition evaluator. In particular, a rule below the first winner reads **Not evaluated because an earlier rule matched**; other exact reasons distinguish disabled/incomplete rules, missing/not-found/unknown/unavailable sources, nonnumeric sources, each kind of comparison miss, and a match. Reading the trace does not operate the entity or save configuration.
+
 ## Another Entity rule seems to use the lamp entity instead
 
 v1.0.2 explicitly prevents that fallback. If Another entity is selected and `source_entity` is blank, the rule is skipped.
@@ -274,6 +342,8 @@ Check whether:
 
 Clear ACK rearms; it is not the same as acknowledging an active Until-ACK change event.
 
+For a Derived lamp, the source for change detection is its resolved final ON/OFF state after rules. A qualifying external rule transition can create one change alert; rerendering with the same final state should not keep creating new ones.
+
 ## Automatic ACK rearm never occurs
 
 If **Alert when = ON or OFF**, there is no non-alert state, so automatic rearm cannot naturally occur.
@@ -299,14 +369,16 @@ Ensure Primary is Label or State/value, or provide custom Primary text. Paired l
 
 Group membership is based on the exact `group` string. Check:
 
-- group names;
+- group names and capitalization (`Boiler Room` and `boiler room` are different);
 - Group ACK scope (`all` vs `alerting`);
 - Include change alerts setting;
 - Pair ACK Lock if a paired partner is involved.
 
+Choose an existing suggestion in the lamp's Group field when possible. Deliberately typing a new capitalization creates a distinct group. Assigning a group to one half of a valid pair updates its partner.
+
 ## Lamp Test changes ACK state
 
-It should not. ACK/Clear mutations are blocked while Lamp Test helper is ON. If reproducible in v1.0.2, report it immediately with exact steps.
+It should not. ACK/Clear mutations are blocked while Lamp Test is active. The v1.1.0 runtime captures one Lamp Test snapshot for the complete render, so state evaluation and brightness cannot disagree merely because a short manual-test timer expires between those steps. If ACK still changes, report the exact helper/manual-test path and timing.
 
 ## Unavailable entity shows INOP
 
@@ -320,6 +392,30 @@ v1.0.2 contains additional malformed-value hardening. The visual editor limits d
 
 If a malformed value still crashes rendering, include the exact YAML and console stack trace.
 
+## Historical alarm totals differ between devices or missed an alarm
+
+**Local browser observations** are intentionally device-local and count only Alarm/Trip arrivals seen while that card is open, awake, and connected. They cannot backfill dashboard downtime and are removed with browser site data. Make sure different logical panels use different Panel IDs.
+
+For one shared value, set **Tally source** to **Home Assistant entities** and configure a Day/Week/Month/Year sensor for every enabled tally. Home Assistant—not the card—must maintain those values and time windows. Entity mode stops local history tracking and hides **Clear saved alarm totals** because the card cannot reset the source sensors.
+
+## An entity-backed historical tally shows `—`
+
+The configured entity is blank/missing, its state is `unknown` or `unavailable`, or its state is nonnumeric, non-finite, or negative. The dash is deliberate so missing data is not misreported as zero. Confirm the entity exists and has a finite non-negative numeric state in Home Assistant Developer Tools. A real numeric zero displays as `0`.
+
+## My media only shows text fields
+
+In v1.1.0, open **Panel settings → Alarm output**, select **Media player**, choose a target player, and use **Home Assistant media browser**. Selecting an item from **My media** fills the media content ID and content type automatically.
+
+The text fields are still available under the collapsed **Manual media settings** section for a direct URL or `media-source://` URI. If the media browser control itself is missing, confirm that only one v1.1.0 Annunciator Grid Card resource is loaded, clear the browser cache, and reload the dashboard.
+
+If a picked item does not play, verify that the chosen media player can play the same item from Home Assistant's Media panel. Then check the browser console and Home Assistant logs for a `media_player.play_media` service error.
+
+## SILENCE does not stop Script alarm output
+
+In **Panel settings → Alarm output → Script**, select a separate **Silence script** that stops or reverses the horn/output started by **Start script**. The card calls both through `script.turn_on`; it does not use `script.turn_off` because that cannot undo arbitrary devices changed by a script. After a successful start, the applied Silence script runs when SILENCE is selected, no active audible alarms remain, the sounding output configuration changes, or the card disconnects. Advanced YAML can use `silence_action` as the fallback for those transitions when no Silence script is configured. If the start call failed, the card does not mark the output as sounding and therefore does not schedule a stop for that failed start.
+
+Also confirm that the dashboard remains open and connected and that the signed-in user can run both scripts. Alarm output and its silenced state are browser-card behavior, not a Home Assistant server alarm engine. Multiple open card instances may each call the target, and recreating/reloading an instance can recreate its local silence state. Use a Home Assistant automation when the behavior must continue without an open dashboard.
+
 ## Editor field loses focus or resets while typing
 
 The editor is designed not to rebuild the entire tree on ordinary reflected config updates. If a particular field still loses focus:
@@ -330,7 +426,7 @@ The editor is designed not to rebuild the entire tree on ordinary reflected conf
 
 ## Diagnostics info button performs the lamp action
 
-v1.0.2 isolates diagnostic/info controls from lamp gesture handling. If clicking/holding the info icon also controls/ACKs a lamp, verify cache/version and report the exact browser/device.
+The card isolates diagnostic/info controls from lamp gesture handling. If clicking or holding the info icon also controls or acknowledges a lamp, verify the loaded version and report the exact browser/device.
 
 ## What to include in a GitHub issue
 

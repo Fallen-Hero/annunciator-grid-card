@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Annunciator spacer and ACK rearm validation</title>
+  <style>
+    :root{color-scheme:dark;--primary-color:#42a5f5;--primary-text-color:#f4f7fb;--secondary-text-color:#b8c1cf;--divider-color:#536071;--card-background-color:#252b34}
+    *{box-sizing:border-box}body{margin:0;padding:18px;background:#15191f;color:var(--primary-text-color);font-family:system-ui,sans-serif}main{max-width:1100px;margin:auto}.audit{padding:10px 12px;border:1px solid #8b6a28;border-radius:8px;background:#382c15;color:#ffe2a0;font-weight:800}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.sample{padding:10px;border:1px solid #465264;border-radius:9px;background:#212730;min-width:0}.sample h2{font-size:13px;margin:0 0 8px}.editorHost{padding:12px;border:1px solid #465264;border-radius:9px;background:#212730}annunciator-grid-card,annunciator-grid-card-editor{display:block;width:100%}body.mobile main{max-width:430px}.mobile .cards{grid-template-columns:1fr 1fr}.mobile .editorHost{padding:8px}
+    ha-form select,ha-form input{width:100%;min-height:44px;border:1px solid #5b6675;border-radius:6px;padding:0 9px;background:#2d333c;color:#f5f7fa}ha-switch input{width:20px;height:20px;accent-color:var(--primary-color)}
+    @media(max-width:650px){.cards{grid-template-columns:1fr 1fr}}
+  </style>
+  <script>
+    window.browserErrors=[];addEventListener('error',e=>browserErrors.push(String(e.error?.stack||e.message)));addEventListener('unhandledrejection',e=>browserErrors.push(String(e.reason?.stack||e.reason)));
+    class MockHaSwitch extends HTMLElement{set checked(v){this._checked=!!v;this._render()}get checked(){return!!this._checked}connectedCallback(){this._render()}_render(){this.textContent='';const i=document.createElement('input');i.type='checkbox';i.checked=this.checked;i.onchange=()=>{this._checked=i.checked;this.dispatchEvent(new Event('change',{bubbles:true}))};this.append(i)}}
+    class MockHaForm extends HTMLElement{set schema(v){this._schema=v;this._render()}get schema(){return this._schema||[]}set data(v){this._data=v||{};this._render()}get data(){return this._data||{}}connectedCallback(){this._render()}_render(){this.textContent='';const e=this.schema[0];if(!e)return;if(e.selector?.select){const s=document.createElement('select');for(const o of e.selector.select.options||[]){const x=document.createElement('option');x.value=o.value;x.textContent=o.label;s.append(x)}s.value=String(this.data[e.name]??'');s.onchange=()=>this.dispatchEvent(new CustomEvent('value-changed',{detail:{value:{[e.name]:s.value}}}));this.append(s)}else{const i=document.createElement('input');i.value=String(this.data[e.name]||'');this.append(i)}}}
+    class MockHaSelector extends HTMLElement{}
+    customElements.define('ha-switch',MockHaSwitch);customElements.define('ha-form',MockHaForm);customElements.define('ha-selector',MockHaSelector);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=checkpoint18"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <script>if(new URLSearchParams(location.search).get('mobile')==='1')document.body.classList.add('mobile')</script>
+  <main>
+    <h1>Spacer / ACK rearm browser audit</h1>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <section class="cards">
+      <article class="sample"><h2>Compatibility</h2><annunciator-grid-card id="compat"></annunciator-grid-card></article>
+      <article class="sample"><h2>Blend gap</h2><annunciator-grid-card id="blend"></annunciator-grid-card></article>
+      <article class="sample"><h2>Custom spacer</h2><annunciator-grid-card id="custom"></annunciator-grid-card></article>
+      <article class="sample"><h2>Per-spacer override</h2><annunciator-grid-card id="override"></annunciator-grid-card></article>
+    </section>
+    <section class="editorHost"><annunciator-grid-card-editor id="editor"></annunciator-grid-card-editor></section>
+  </main>
+  <script>
+    (async()=>{
+      const failures=[],checks=[];const check=(value,name)=>{checks.push(name);if(!value)failures.push(name)};
+      const hass={states:{'binary_sensor.alarm':{state:'on',attributes:{friendly_name:'Alarm'}}},callService:async()=>{},language:'en'};
+      const base={type:'custom:annunciator-grid-card',config_version:3,columns:1,cell_width:180,cell_height:112,outer_frame:6,mullion:6,panel_sizing:'fixed',severity_colors:{enabled:true,off:'#eeeeee',off_enabled:true,blank:'#17191c',blank_enabled:true},header_controls:{acknowledge:{enabled:false},silence:{enabled:false},reset:{enabled:false},lamp_test:{enabled:false},clear_acknowledged:{enabled:false}},entities:[{uid:'spacer',ack_slot:1,entity:''}]};
+      const configs={
+        compat:{...base},
+        blend:{...base,spacer_appearance:{mode:'blend'}},
+        custom:{...base,spacer_appearance:{mode:'custom',fill:'#285d78',bezel:'#8b4a76',border:'#e7c25a',border_width:5}},
+        override:{...base,spacer_appearance:{mode:'blend'},entities:[{uid:'spacer',ack_slot:1,entity:'',spacer_appearance:{mode:'custom',fill:'#315c34',bezel:'#744122',border:'#f5f0d0',border_width:3}}]},
+      };
+      for(const [id,cfg] of Object.entries(configs)){const card=document.getElementById(id);card._applyResponsivePanel=()=>{};card.setConfig(cfg);card.hass=hass;await card._renderDynamic()}
+      const cell=id=>document.getElementById(id).shadowRoot.querySelector('.cell'),win=id=>cell(id).querySelector('.window');
+      check(cell('compat').classList.contains('spacer-default'),'compat-class');check(!cell('compat').classList.contains('spacer-blend'),'compat-not-blend');
+      check(cell('blend').classList.contains('spacer-blend'),'blend-class');check(getComputedStyle(cell('blend')).backgroundColor==='rgba(0, 0, 0, 0)','blend-cell-transparent');check(getComputedStyle(win('blend')).backgroundColor==='rgba(0, 0, 0, 0)','blend-window-transparent');check(parseFloat(getComputedStyle(win('blend')).borderTopWidth)===0||getComputedStyle(win('blend')).borderTopColor==='rgba(0, 0, 0, 0)','blend-border-hidden');check(getComputedStyle(win('blend')).boxShadow==='none','blend-shadow-hidden');
+      check(cell('custom').classList.contains('spacer-custom'),'custom-class');check(getComputedStyle(cell('custom')).backgroundColor==='rgb(139, 74, 118)','custom-bezel');check(getComputedStyle(win('custom')).backgroundColor==='rgb(40, 93, 120)','custom-fill');check(getComputedStyle(win('custom')).borderTopColor==='rgb(231, 194, 90)','custom-border');check(getComputedStyle(win('custom')).borderTopWidth==='5px','custom-border-width');
+      check(getComputedStyle(cell('override')).backgroundColor==='rgb(116, 65, 34)','per-spacer-overrides-global');check(getComputedStyle(win('override')).backgroundColor==='rgb(49, 92, 52)','per-spacer-fill');
+
+      const editor=document.getElementById('editor');editor.hass=hass;editor.setConfig({...configs.override,ack_rearm_default:'auto',entities:[configs.override.entities[0],{uid:'alarm',ack_slot:2,entity:'binary_sensor.alarm',alert_style:'none',alert_when:'on',ack_rearm:'inherit'}]});
+      editor._selectedLamp=0;editor._renderEditor();let pane=editor.shadowRoot.getElementById('editor');check(pane.textContent.includes('Spacer fill')&&pane.textContent.includes('Spacer frame / bezel')&&pane.textContent.includes('Spacer border width'),'per-spacer-fields');const spacerForm=[...pane.querySelectorAll('ha-form')].find(f=>f.schema?.[0]?.selector?.select?.options?.some(o=>o.value==='blend'));check(!!spacerForm,'per-spacer-mode-selector');spacerForm?.dispatchEvent(new CustomEvent('value-changed',{detail:{value:{v:'blend'}}}));check(editor._config.entities[0].spacer_appearance.mode==='blend','per-spacer-mutation');
+      editor._panelPage='appearance';editor._renderPanel();let panel=editor.shadowRoot.getElementById('panelBody');check(panel.textContent.includes('Spacers')&&panel.textContent.includes('Spacer default'),'global-spacer-fields');
+      editor._panelPage='acknowledgement';editor._renderPanel();panel=editor.shadowRoot.getElementById('panelBody');check(panel.textContent.includes('Default ACK rearm'),'panel-ack-field');const panelAck=[...panel.querySelectorAll('ha-form')].find(f=>JSON.stringify(f.schema?.[0]?.selector?.select?.options?.map(o=>o.value))===JSON.stringify(['auto','manual']));check(!!panelAck,'panel-ack-selector');panelAck?.dispatchEvent(new CustomEvent('value-changed',{detail:{value:{v:'manual'}}}));check(editor._config.ack_rearm_default==='manual','panel-ack-mutation');
+      editor._selectedLamp=1;editor._page='behavior';editor._renderEditor();pane=editor.shadowRoot.getElementById('editor');check(pane.textContent.includes('ACK rearm'),'lamp-ack-field');const lampAck=[...pane.querySelectorAll('ha-form')].find(f=>f.schema?.[0]?.selector?.select?.options?.some(o=>o.value==='inherit')&&f.schema?.[0]?.selector?.select?.options?.some(o=>o.value==='auto'));check(!!lampAck,'lamp-ack-selector');lampAck?.dispatchEvent(new CustomEvent('value-changed',{detail:{value:{v:'auto'}}}));check(editor._config.entities[1].ack_rearm==='auto','lamp-ack-mutation');
+      for(const page of ['layout','appearance','acknowledgement','alarm_output','groups','advanced']){editor._panelPage=page;try{editor._renderPanel();check(!!editor.shadowRoot.getElementById('panelBody').textContent.trim(),`panel-${page}`)}catch(e){failures.push(`panel-${page}:${e.message}`)}}
+      for(const page of ['setup','display','behavior','appearance','interaction','rules','advanced']){editor._page=page;try{editor._renderEditor();check(!!editor.shadowRoot.getElementById('editor').textContent.trim(),`lamp-${page}`)}catch(e){failures.push(`lamp-${page}:${e.message}`)}}
+
+      const rearmCard=document.createElement('annunciator-grid-card');rearmCard._applyResponsivePanel=()=>{};document.body.append(rearmCard);const rearmLamp={uid:'rearm',ack_slot:1,entity:'binary_sensor.alarm',alert_style:'none',alert_when:'on',ack_rearm:'inherit'};rearmCard.setConfig({...base,panel_id:'browser-rearm',ack_rearm_default:'auto',entities:[rearmLamp]});localStorage.setItem('annun_ack_map::browser-rearm',JSON.stringify({'browser-rearm::rearm':123}));rearmCard.hass=hass;await rearmCard._renderDynamic();check(!!JSON.parse(localStorage.getItem('annun_ack_map::browser-rearm'))['browser-rearm::rearm'],'active-steady-ack-held');rearmCard.hass={...hass,states:{'binary_sensor.alarm':{state:'off',attributes:{friendly_name:'Alarm'}}}};await rearmCard._renderDynamic();check(!JSON.parse(localStorage.getItem('annun_ack_map::browser-rearm'))['browser-rearm::rearm'],'normal-steady-ack-cleared');
+      await new Promise(r=>setTimeout(r,180));check(browserErrors.length===0,'no-browser-errors');check(!document.documentElement.scrollWidth||document.documentElement.scrollWidth<=document.documentElement.clientWidth+1||!document.body.classList.contains('mobile'),'compact-no-page-overflow');
+      window.spacerAckValidation={checks:checks.length,failures,errors:browserErrors};const audit=document.getElementById('audit');audit.textContent=failures.length?`Browser audit failed: ${failures.join(' · ')}`:`Browser audit passed: ${checks.length} checks · spacers · ACK inheritance/state · 13 editor tabs · no browser errors`;audit.style.borderColor=failures.length?'#a54d5b':'#3d7c52';audit.style.background=failures.length?'#3c1d23':'#173222';audit.style.color=failures.length?'#ffd0d5':'#a8e6b8';document.body.dataset.status=failures.length?'fail':'pass';document.body.dataset.ready='true';
+    })();
+  </script>
+</body>
+</html>

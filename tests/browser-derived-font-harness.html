@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Annunciator derived lamp, tally label, and font validation</title>
+  <style>
+    :root{color-scheme:dark;--primary-color:#42a5f5;--primary-text-color:#f5f7fa;--secondary-text-color:#b7c0ce;--divider-color:#566070;--card-background-color:#262b33}
+    *{box-sizing:border-box}body{margin:0;padding:20px;background:#171a1f;color:var(--primary-text-color);font-family:system-ui,sans-serif}.host{max-width:980px;margin:0 auto;padding:16px;border:1px solid #46505e;border-radius:12px;background:#20252c}h1{margin:0 0 6px;font-size:22px}.intro{margin:0 0 14px;color:var(--secondary-text-color)}.audit{padding:9px 11px;border:1px solid #3d7c52;border-radius:8px;background:#173222;color:#a8e6b8;font-weight:700}.cards{display:grid;grid-template-columns:1fr;gap:16px;margin:16px 0}.fontSamples{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}.sample{padding:10px;border:1px solid #4b5665;border-radius:8px;overflow:hidden}.sample div{font-size:20px;white-space:nowrap}annunciator-grid-card-editor{display:block;width:100%}ha-form select,ha-form input{width:100%;min-height:46px;border:1px solid #5b6675;border-radius:6px;padding:0 10px;background:#2d333c;color:#f5f7fa}ha-switch input{width:20px;height:20px}ha-icon{display:inline-flex;align-items:center;justify-content:center}
+  </style>
+  <script>
+    window.__ANNUNCIATOR_TEST_MODE__=true;window.browserErrors=[];addEventListener("error",e=>browserErrors.push(String(e.error?.stack||e.message)));addEventListener("unhandledrejection",e=>browserErrors.push(String(e.reason?.stack||e.reason)));window.confirm=()=>true;
+    class MockHaSwitch extends HTMLElement{set checked(v){this._checked=!!v;this._render()}get checked(){return!!this._checked}connectedCallback(){this._render()}_render(){this.textContent="";const i=document.createElement("input");i.type="checkbox";i.checked=this.checked;i.addEventListener("change",()=>{this._checked=i.checked;this.dispatchEvent(new Event("change",{bubbles:true}))});this.append(i)}}
+    class MockHaForm extends HTMLElement{set schema(v){this._schema=v;this._render()}get schema(){return this._schema||[]}set data(v){this._data=v||{};this._render()}get data(){return this._data||{}}connectedCallback(){this._render()}_emit(value){const key=this.schema[0]?.name||"v";this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:{[key]:value}},bubbles:true}))}_render(){this.textContent="";const e=this.schema[0];if(!e)return;if(e.selector?.select){const s=document.createElement("select");for(const o of e.selector.select.options||[]){const n=document.createElement("option");n.value=o.value;n.textContent=o.label;s.append(n)}s.value=String(this.data[e.name]??"");s.addEventListener("change",()=>this._emit(s.value));this.append(s)}else{const i=document.createElement("input");i.value=String(this.data[e.name]||"");i.placeholder="Select entity";i.addEventListener("change",()=>this._emit(i.value));this.append(i)}}}
+    class MockHaIcon extends HTMLElement{set icon(v){this._icon=v;this.textContent=v||""}get icon(){return this._icon||""}}
+    customElements.define("ha-switch",MockHaSwitch);customElements.define("ha-form",MockHaForm);customElements.define("ha-icon",MockHaIcon);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=derived-font-cp24"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <main class="host">
+    <h1>Derived lamp, historical labels, and fonts</h1>
+    <p class="intro">Browser-level validation for a rule-driven lamp without a primary entity and visible font choices.</p>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <div class="cards"><annunciator-grid-card id="card"></annunciator-grid-card></div>
+    <div id="fontSamples" class="fontSamples"></div>
+    <annunciator-grid-card-editor id="editor"></annunciator-grid-card-editor>
+  </main>
+  <script>
+    (async()=>{
+      const run=new URLSearchParams(location.search).get("run")||"default",panelId=`browser-derived-${run}`,historyKey=`annun_alarm_history::${panelId}`;localStorage.removeItem(historyKey);
+      const stateFor=value=>({"binary_sensor.driver":{state:value,attributes:{friendly_name:"Driver alarm",icon:"mdi:alert"}}});
+      const hassFor=value=>({states:stateFor(value),callService:async()=>{},language:"en"});
+      const config={type:"custom:annunciator-grid-card",config_version:3,panel_id:panelId,title:"DERIVED TEST",header_tallies:{active:true,alarm:true,unacknowledged:true,alarms_day:true,alarms_day_label:"PAST 24 HOURS"},show_ack_all:true,show_clear_ack:true,columns:1,cell_width:300,cell_height:130,entities:[{uid:"derived-1",ack_slot:1,cell_type:"lamp",source_mode:"derived",derived_base_state:"off",lamp_type:"alarm",label_source:"custom",primary_mode:"custom",primary_text:"REMOTE ALARM",secondary_mode:"custom",secondary_text:"RULE DRIVEN",content_mode:"icon_text",icon:"mdi:alert-decagram",icon_size:34,font_family:"monospace",alert_style:"blink",enable_auto_styles:true,auto_styles:[{name:"Driver active",enabled:true,source:"entity",source_entity:"binary_sensor.driver",kind:"state",state:"on",force_state:"on",severity:"alarm",color:"#ff3232"}]}]};
+      const card=document.getElementById("card");card.setConfig(config);card._hass=hassFor("off");await card._renderDynamic();const offCell=card.shadowRoot.querySelector(".cell"),offState={on:offCell?.classList.contains("on"),unavailable:offCell?.classList.contains("unavailable")};card._hass=hassFor("on");await card._renderDynamic();const onCell=card.shadowRoot.querySelector(".cell"),onState={on:onCell?.classList.contains("on"),unavailable:onCell?.classList.contains("unavailable"),text:onCell?.textContent||"",font:getComputedStyle(onCell?.querySelector(".text")).fontFamily,tallies:card.shadowRoot.getElementById("headerTallies")?.textContent||"",icon:onCell?.querySelector("ha-icon")?.icon||""};
+      const editor=document.getElementById("editor");editor.hass=hassFor("on");editor.setConfig({type:"custom:annunciator-grid-card",config_version:3,panel_id:`editor-${run}`,header_tallies:{alarms_day:true,alarms_day_label:"PAST 24 HOURS"},entities:[]});editor.shadowRoot.getElementById("addDerived").click();const derived=editor._config.entities[0];editor._page="rules";editor._renderEditor();[...editor.shadowRoot.querySelectorAll("#editor button")].find(button=>button.textContent==="+ Add rule")?.click();
+      editor.shadowRoot.getElementById("panelSettings").open=true;editor._panelPage="acknowledgement";editor._renderPanel();const panelText=editor.shadowRoot.getElementById("panelBody")?.textContent||"";
+      const testApi=window.__ANNUNCIATOR_TEST_API__,fonts=[["condensed","Condensed"],["monospace","Monospace"],["serif","Serif"]],fontSamples=document.getElementById("fontSamples"),fontResults=[];
+      for(const [family,label] of fonts){const wrap=document.createElement("section"),heading=document.createElement("strong"),sample=editor._fontPreview(family,"","");heading.textContent=label;wrap.className="sample";wrap.append(heading,sample);fontSamples.append(wrap);fontResults.push({family,stack:sample.dataset.fontStack,computed:getComputedStyle(sample).fontFamily,width:sample.scrollWidth,title:sample.title})}
+      const failures=[];
+      if(offState.on||offState.unavailable)failures.push("derived-off-base-state");
+      if(!onState.on||onState.unavailable)failures.push("derived-rule-state");
+      if(!onState.text.includes("REMOTE ALARM")||!onState.text.includes("RULE DRIVEN"))failures.push("derived-custom-text");
+      if(onCell?.querySelector("ha-icon")?.getAttribute("icon")!=="mdi:alert-decagram")failures.push("derived-icon");
+      for(const label of ["ACTIVE 1","ALARM 1","UNACKNOWLEDGED 1","PAST 24 HOURS 1"])if(!onState.tallies.includes(label))failures.push(`tally:${label}`);
+      if(!onState.font.toLowerCase().includes("mono"))failures.push("runtime-font");
+      if(derived?.cell_type!=="lamp"||derived?.source_mode!=="derived"||derived?.entity||derived?.derived_base_state!=="off")failures.push("add-derived-defaults");
+      if(editor._config.entities[0]?.auto_styles?.length!==1||editor._config.entities[0]?.auto_styles?.[0]?.force_state!=="on")failures.push("derived-starter-rule");
+      if(editor.shadowRoot.getElementById("configWarnings")?.textContent.includes("spacer"))failures.push("derived-spacer-warning");
+      for(const label of ["Historical alarm tallies","Custom label"])if(!panelText.includes(label))failures.push(`editor:${label}`);if(![...editor.shadowRoot.querySelectorAll("#panelBody input")].some(input=>input.placeholder==="ALARM DAY"&&input.value==="PAST 24 HOURS"))failures.push("editor:PAST 24 HOURS");
+      if(fontResults.some(result=>!result.stack||result.computed.length<3||!result.title.includes(result.stack)))failures.push("font-preview-resolution");
+      if(new Set(fontResults.map(result=>result.computed)).size!==3)failures.push("font-presets-not-distinct");
+      if(testApi.configuredFontStack("system","")===testApi.configuredFontStack("monospace","")||testApi.configuredFontStack("monospace","")===testApi.configuredFontStack("serif",""))failures.push("font-stack-collision");
+      if(browserErrors.length)failures.push(`browser-errors:${browserErrors.length}`);
+      window.derivedFontValidation={failures,offState,onState,derived,rule:editor._config.entities[0]?.auto_styles?.[0],fontResults,errors:browserErrors};const audit=document.getElementById("audit");audit.textContent=failures.length?`Browser audit failed: ${failures.join(" · ")}`:"Browser audit passed: derived OFF/ON rules · text and icon · ACK/tallies/history · custom tally label · distinct resolved font stacks · editor workflow · no browser errors";audit.style.borderColor=failures.length?"#9b3f49":"#3d7c52";audit.style.background=failures.length?"#3b1c21":"#173222";document.body.dataset.status=failures.length?"fail":"pass";document.body.dataset.ready="true";
+    })();
+  </script>
+</body>
+</html>

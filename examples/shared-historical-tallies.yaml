@@ -1,0 +1,36 @@
+# Shared historical values supplied by Home Assistant entities.
+#
+# The card only reads these entity states. Create and maintain the rolling
+# counters with the Home Assistant automation/helper/integration appropriate
+# to your installation. Missing, unknown, unavailable, nonnumeric, non-finite,
+# or negative states display as a dash instead of zero.
+type: custom:annunciator-grid-card
+title: Shared Alarm Totals
+panel_id: shared_alarm_totals
+header_tallies:
+  active: true
+  alarm: true
+  history_source: entities
+  alarms_day: true
+  alarms_day_label: ALARMS 24H
+  alarms_day_entity: sensor.annunciator_alarm_arrivals_24h
+  alarms_week: true
+  alarms_week_label: ALARMS 7D
+  alarms_week_entity: sensor.annunciator_alarm_arrivals_7d
+  alarms_month: true
+  alarms_month_label: ALARMS 30D
+  alarms_month_entity: sensor.annunciator_alarm_arrivals_30d
+  alarms_year: true
+  alarms_year_label: ALARMS 365D
+  alarms_year_entity: sensor.annunciator_alarm_arrivals_365d
+entities:
+  - entity: binary_sensor.boiler_trip
+    lamp_type: alarm
+    color_behavior: severity
+    severity: trip
+    eval_mode: toggle
+    alert_style: blink
+    alert_when: on
+    participates_in_alarm_output: false
+    primary_mode: name
+    secondary_mode: state

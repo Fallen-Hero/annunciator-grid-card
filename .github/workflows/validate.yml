@@ -16,18 +16,29 @@ jobs:
       contents: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: "11.19.0"
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Validate source
-        run: npm test
+        run: pnpm test
 
   validate-hacs:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: HACS validation
         uses: hacs/action@main

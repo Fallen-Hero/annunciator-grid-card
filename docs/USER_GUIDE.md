@@ -1,4 +1,28 @@
-# Annunciator Grid Card v1.0.2 — Complete User Guide
+# Annunciator Grid Card v1.1.0 — Complete User Guide
+
+## v1.1.0 features
+
+v1.1.0 is additive: existing v1.0.2 panels keep their legacy lamp geometry, labels, output behavior, and 1×1 layout until a new option is enabled.
+
+- **Lamp shape**: Rectangle, Round rectangle, Pill, Square, Circle, or Indicator dot. The inherited setting preserves the v1.0.2 window. The outer bezel, border, lens, and text all follow the selected geometry rather than leaving a rectangular frame around circles or pills. Indicator dot uses roughly 80% of the available short side and includes a compact text layout.
+- **Lamp icons**: each lamp can remain Text, show an Icon only, or combine an icon with any selected Primary, Secondary, and Tertiary lines. Choose a Home Assistant icon, set its size, and optionally override its color; otherwise it follows the entity/domain icon and current lamp text color.
+- **Custom lamp fonts**: choose a panel lamp-font default and optionally override individual lamps with presets or an installed custom CSS font stack. A live **Font preview** uses the resolved browser stack. Existing cards keep their original built-in typeface.
+- **Column span** and **Row span**: extend a lamp across cells. Placement uses collision-free physical blocks; a pair uses the larger span selected by either half.
+- **Illumination**: translucent illuminated lens treatment while ON, with internal diffusion, a brighter lens surface, and a color-matched halo. It works with every lamp shape, style, lens material, and paired half. Retro illumination uses a full-color incandescent diffuser rather than the Modern-style white center.
+- **Lamp brightness**: choose global or per-lamp Normal, Dim OFF, Dim ON, Dim non-alert, Dim all, or Custom OFF/ON/ALERT profiles. Per-lamp Inherit keeps setup simple; INOP and Lamp Test remain full brightness.
+- **Appearance presets**: save up to 24 named panel-wide looks and 24 named lamp looks in the card configuration. Panel presets never change lamps or behavior; lamp presets contain visual fields only and never replace a lamp's identity, text/icon choice, severity, alarm behavior, rules, actions, group, pair, or span.
+- **Pair orientation**: Vertical or Horizontal. Existing TOP/BOTTOM metadata stays readable; horizontally it means left/right.
+- **Audible alarm**: opt a lamp into panel output. Existing lamps remain excluded.
+- Header tallies: live ACTIVE, ALARM, UNACKNOWLEDGED, TOTAL, and UNAVAILABLE plus optional ALARM DAY, ALARM WEEK, ALARM MONTH, and ALARM YEAR totals. Every historical label can be renamed. Local-browser mode uses rolling 24-hour/7-day/30-day/365-day observations; entity mode displays the values maintained by the selected Home Assistant entities and does not impose a rolling window.
+- Header controls, in fixed order: ACKNOWLEDGE, SILENCE, RESET, LAMP TEST, CLEAR ACKNOWLEDGED. Every control is independently visible and has a custom label.
+- Header appearance: optional background/border, separate title/tally/button text colors, normal/hover button fills, button border, font family/weight, title/tally/button sizes, and button corner radius.
+- Rounded surfaces: opt-in independent radii for the complete panel, outer grid frame, complete header, header buttons, and inherited/Round rectangle lamp bezels and borders. Explicit Rectangle, Pill, Square, Circle, and Indicator dot geometry remains authoritative.
+- Explicit **None** switches independently remove the panel background/edge/frame, lamp bezels/lens borders, header background/border/button surfaces, and spacer fill/bezel/border. Saved colors are retained when a layer is temporarily removed.
+- Alarm output modes: None, **Media player**, Script, and Advanced action. Media player mode includes Home Assistant's native media browser plus a collapsible manual URI/URL fallback. Script mode accepts separate Start and optional Silence scripts; Advanced action exposes a **Start service** and optional **Silence service**.
+- Editor cleanup: **Quick setup** is the default for common lamp work, **Full editor** retains every specialist tab, existing group names are suggested with exact casing, paired halves remain group-consistent, and pair-safe bulk editing applies common settings only after an explicit Apply.
+- Rule diagnostics: a read-only live trace explains the current result of every ordered Conditional Rule and identifies the first winner without changing the lamp or calling a service.
+
+SILENCE stops output without acknowledging. An unchanged alarm stays silent; a newly arriving participating alarm re-sounds. RESET only rearms cleared alarm state. LAMP TEST toggles the configured helper or runs a local three-second test.
 
 This guide covers normal setup, advanced annunciator behavior, acknowledgement, rules, interactions, panel appearance, diagnostics, compatibility, and common recipes.
 
@@ -11,7 +35,7 @@ This guide covers normal setup, advanced annunciator behavior, acknowledgement, 
 3. [Optional Home Assistant helpers](#3-optional-home-assistant-helpers)
 4. [Quick start](#4-quick-start)
 5. [The visual editor](#5-the-visual-editor)
-6. [Lamp Navigator, lamps, pairs, and spacers](#6-lamp-navigator-lamps-pairs-and-spacers)
+6. [Lamp navigator, lamps, pairs, and spacers](#6-lamp-navigator-lamps-pairs-and-spacers)
 7. [Lamp types](#7-lamp-types)
 8. [Setup: choosing when a lamp is ON](#8-setup-choosing-when-a-lamp-is-on)
 9. [Color behavior: Standard, Severity, Custom, Legacy](#9-color-behavior-standard-severity-custom-legacy)
@@ -20,7 +44,7 @@ This guide covers normal setup, advanced annunciator behavior, acknowledgement, 
 12. [Value conversion and formatting](#12-value-conversion-and-formatting)
 13. [Alert behavior](#13-alert-behavior)
 14. [Acknowledgement fundamentals](#14-acknowledgement-fundamentals)
-15. [ACK ALL and CLEAR ACK header controls](#15-ack-all-and-clear-ack-header-controls)
+15. [Header alarm controls](#15-header-alarm-controls)
 16. [Change alerts](#16-change-alerts)
 17. [Configurable Tap, Double tap, and Long press](#17-configurable-tap-double-tap-and-long-press)
 18. [Conditional Rules](#18-conditional-rules)
@@ -38,7 +62,7 @@ This guide covers normal setup, advanced annunciator behavior, acknowledgement, 
 30. [Keyboard and accessibility](#30-keyboard-and-accessibility)
 31. [What wins? Precedence rules](#31-what-wins-precedence-rules)
 32. [Behavior matrices](#32-behavior-matrices)
-33. [Upgrade notes for v1.0.0 / v1.0.1](#33-upgrade-notes-for-v100--v101)
+33. [Upgrade notes for older releases](#33-upgrade-notes-for-older-releases)
 34. [Recipes](#34-recipes)
 35. [Home Assistant Jinja and templates](#35-home-assistant-jinja-and-templates)
 36. [Recommended practices](#36-recommended-practices)
@@ -62,7 +86,7 @@ Home Assistant entity
   → lens / lamp / panel styling
 ```
 
-The important simplification in v1.0.2 is that most users can ignore severity entirely. A normal lamp can simply be:
+The important simplification retained in v1.1.0 is that most users can ignore severity entirely. A normal lamp can simply be:
 
 ```text
 condition true  → ON color
@@ -85,7 +109,7 @@ Examples:
 
 ## 2. Installation and updating
 
-### HACS custom repository
+### Install with HACS
 
 Until the repository is part of the default HACS catalog:
 
@@ -96,7 +120,7 @@ Until the repository is part of the default HACS catalog:
 5. Open **Annunciator Grid Card** and choose **Download**.
 6. Refresh Home Assistant after installation or update.
 
-### Manual installation
+### Install manually
 
 1. Download `annunciator-grid-card.js` from the latest GitHub Release.
 2. Copy it to `<config>/www/annunciator-grid-card.js`.
@@ -108,7 +132,11 @@ resources:
     type: module
 ```
 
-4. Refresh Home Assistant.
+4. Reload Home Assistant, hard-refresh the browser, and confirm that the visual editor shows `v1.1.0`.
+
+### Update from v1.0.2
+
+Back up the dashboard configuration before updating. Update through HACS or replace the manually installed JavaScript file, then hard-refresh every browser that displays the panel. Existing v1.0.2 configurations preserve their established visuals and behavior unless a new v1.1 option is deliberately enabled.
 
 ### If an update appears not to load
 
@@ -132,7 +160,7 @@ input_text:
     max: 255
 ```
 
-Select it under **Panel Settings → Acknowledgement → ACK storage → Persistent input_text**.
+Select it under **Panel settings → Acknowledgement → ACK storage → Persistent input_text**.
 
 Use persistent storage when multiple browsers/devices should share acknowledgement state.
 
@@ -144,7 +172,7 @@ input_boolean:
     name: Annunciator Lamp Test
 ```
 
-Select it under **Panel Settings → Advanced → Lamp test entity**.
+Select it under **Panel settings → Advanced → Lamp test entity**.
 
 ## 4. Quick start
 
@@ -165,7 +193,7 @@ A new lamp defaults to:
 - green ON;
 - neutral/light OFF;
 - no alert animation;
-- automatic ACK rearm stored in the config, although ACK has no visible effect unless an alert is enabled;
+- **Use panel default** ACK rearm, with a new-card panel default of Automatic;
 - Tap = More Info;
 - Double tap = Acknowledge;
 - Long press = Acknowledge.
@@ -177,9 +205,11 @@ This is deliberately simple for normal Home Assistant use.
 The visual editor is divided into two main areas:
 
 - **Lamp editor** for the selected lamp/cell.
-- **Panel Settings** for card-wide behavior.
+- **Panel settings** for card-wide behavior.
 
-A populated lamp has seven tabs:
+A populated lamp opens in **Quick setup**. It contains the fields most people need for a straightforward ON/OFF or alarm lamp: source/entity, type and name, group, ON condition, content/icon/primary line, color behavior, severity, alert effect, and brightness choice.
+
+Choose **Full editor** when you need every control. Full editor has seven tabs:
 
 1. Setup
 2. Display
@@ -189,23 +219,56 @@ A populated lamp has seven tabs:
 6. Rules
 7. Advanced
 
-Panel Settings has five tabs:
+Panel settings has six tabs:
 
 1. Layout
 2. Appearance
 3. Acknowledgement
-4. Groups
-5. Advanced
+4. Alarm output
+5. Groups
+6. Advanced
+
+Switching between Quick setup and Full editor changes only what the editor shows. It does not save an editor-mode field or modify the card. Full editor remains available immediately for line formatting, alert tuning, interactions, rules, pairing, spans, and diagnostics.
+
+Long Appearance pages use eight compact disclosure sections: **Appearance presets**, **Quick appearance**, **Panel & frames**, **Spacers**, **Header**, **Lamp lighting**, **ON/OFF colors**, and **Advanced colors**. Quick appearance opens first; a saved preset library also opens when it contains presets. Open/closed state is remembered when a switch causes the editor to redraw. The lamp Appearance page uses **Lamp appearance presets**, **Colors**, **Shape & size**, **Lens & light**, and **Pairing**. This keeps ordinary ON/OFF setup short without removing advanced capability.
+
+### Bulk editing
+
+Select **Bulk edit** above the Lamp navigator to reveal checkboxes and staged common settings. Selecting either half of a valid pair includes both halves so a bulk operation cannot silently split pair-wide choices. The selection exists only for the current editor session and is not stored in the card.
+
+Bulk editing can apply Group, lamp font/custom font, Shape, Lamp style, Lens, Color behavior, Icon size, **Brightness**, ACK rearm, alarm-output participation, or a saved lamp appearance preset. The Brightness bulk field stages a profile; Apply writes that profile using the panel's current levels. Save and bulk-apply a lamp appearance preset when the same independent Custom percentages must be copied. Existing mixed values are never overwritten merely by opening the panel, previewing brightness, or changing a staged selector: use the adjacent **Apply** button for the one setting you intend to change. One Apply creates one undo point and one configuration update for the selected lamps. Entity/source identity, names and display text, icon identity/color, type/severity, alert behavior, rules, actions, pairing, and spans are not general bulk-edit fields.
+
+Use **Select this page** for only the currently filtered navigator page, **Select all lamps** for every operational lamp, and **Clear** to discard the transient selection. These selection controls do not modify card configuration.
 
 Structural changes such as adding, deleting, moving, duplicating, pairing, and rule changes participate in Undo where supported.
 
-## 6. Lamp Navigator, lamps, pairs, and spacers
+### Alarm output and the media browser
+
+Open **Panel settings → Alarm output**, choose **Media player**, and select the speaker or media-player entity. Then use **Home Assistant media browser** to choose the alarm sound from **My media** or another available media source. The picker saves the media content ID, content type, display title, and other harmless display metadata returned by Home Assistant.
+
+For example, an item named `FGD Alarm.mp3` under **My media** can be selected directly; you do not need to discover or type its `media-source://` URI.
+
+**Manual media settings** stays collapsed below the picker. Open **Media content ID or URL** only when you need to paste a `media-source://` URI or a direct HTTP(S) URL, or use **Media content type** when you need to override the detected type. Playback still sends only the media player, media content ID, and media content type to `media_player.play_media`; picker display metadata is not sent to the service.
+
+For **Script** mode, **Start script** starts the audible output and the optional **Silence script** stops or reverses it. Both are invoked with `script.turn_on`; `script.turn_off` cannot undo devices that the start script has already changed. After Start script succeeds, the card uses the applied configuration's Silence script when SILENCE is selected, when the active audible-alarm set becomes empty, when a sounding output configuration is changed/replaced, or when the card disconnects. On a configuration change, the old applied stop configuration runs before a newly eligible output starts. If no Silence script is selected, an advanced YAML `silence_action` remains available as a fallback for those stop transitions. SILENCE does not acknowledge the lamp; a newly arriving participating alarm can start the output again.
+
+See [`examples/script-alarm-output.yaml`](../examples/script-alarm-output.yaml) for a complete card fragment.
+
+Alarm output is client-driven. At least one browser displaying this card must remain open, awake, connected, and authorized to call the service. Each open card instance can make its own service call, so do not point several simultaneously open dashboards at the same audible target unless duplicate calls are acceptable. Refreshing or recreating a card also recreates its local silence state. Use a Home Assistant automation for server-owned, unattended, or safety-critical notification behavior.
+
+## 6. Lamp navigator, lamps, pairs, and spacers
 
 The navigator treats the grid as physical panel cells instead of a raw entity list.
+
+Small feature badges identify unusual settings without opening a lamp: **Paired**, **Span**, **Dynamic**, **Audible**, and **Override**. Dynamic covers Derived lamps, enabled Conditional Rules, and dynamic display text. Override is limited to meaningful per-lamp visual overrides so a normal v1.0.2-compatible lamp is not falsely marked.
 
 - Cells are numbered `#01`, `#02`, and so on.
 - A spacer counts as a physical cell.
 - A TOP/BOTTOM pair counts as one physical cell.
+- **Add lamp** creates an unfinished lamp and opens its entity selector; it is not treated as a spacer.
+- **Add derived lamp** creates an operational lamp with no primary entity. Its custom text/icon and base state are controlled by normal Conditional Rules that watch other Home Assistant entities.
+- **Add paired lamp** creates one adjacent paired cell with two selectable unfinished halves and an automatic Pair ID. Choose each half in the navigator and assign its entity.
+- **Pair shape** can keep two Independent lamps or render a shared **Split pill**. Split pill works vertically or horizontally and changes only geometry: both halves retain separate state, color, text, icon, alert, ACK, output, and interaction behavior. Existing pairs default to Independent lamps.
 - Search matches labels, entities, groups, pair information, and cell numbers.
 - Pagination keeps large panels manageable.
 
@@ -221,9 +284,30 @@ Duplicating a lamp creates a new configuration item with its own identity/ACK sl
 
 Deleting one half of a pair safely unpairs the survivor.
 
+### Derived lamp
+
+Use **Add derived lamp** when the panel needs a real annunciator window but no single Home Assistant entity should be its primary source—for example, a fixed **PUMP WARNING** label with an icon that illuminates when `binary_sensor.pump_fault` is on.
+
+1. Select **Add derived lamp**.
+2. In Setup, **Data source** is **Derived — rules only**.
+3. Set **Base state** to OFF for the normal “dark until a rule matches” behavior, or ON when rules should turn it off.
+4. In Display, enter custom Primary/Secondary/Tertiary text, choose Text/Icon/Icon + selected lines, and configure the icon normally.
+5. In Rules, select **Add rule**, choose **Another entity**, select the underlying Home Assistant source, set the condition, and normally choose **Force ON** or **Force OFF**.
+
+The starter Derived rule is “Another entity equals `on` → Force ON.” Rules remain ordered and first-match-wins. A Derived lamp is available rather than INOP, participates normally in ACK, pairing, grouping, spans, live/historical tallies, Lamp Test, dimming, and opt-in alarm output, and can use entity-targeted interactions by selecting **Another entity**.
+
+Reference the same underlying Home Assistant entity used by another lamp, not another lamp's final rendered result. Direct lamp-to-lamp references are intentionally not offered because they can create ambiguous cycles. If an external source is missing, unknown, or unavailable, that rule is skipped and the Derived lamp returns to its Base state.
+
 ### Spacer
 
-A spacer intentionally reserves an empty grid position. Select an entity in **Convert to lamp** to convert it into a normal Standard ON/OFF status lamp.
+A spacer intentionally reserves an empty grid position. It now has a focused appearance editor:
+
+- **Use panel default** inherits **Panel settings → Appearance → Spacer default**.
+- **Compatibility appearance** preserves the established spacer lens and blank-color behavior.
+- **Blend into panel (transparent gap)** removes the visible lens, frame/bezel, border, glare, and shadow so the cell reads as an intentional empty gap.
+- **Custom fill / frame / border** exposes **No spacer fill**, **No spacer frame / bezel**, and **No spacer border** independently. **Spacer fill**, **Spacer frame / bezel**, **Spacer border**, and **Spacer border width** appear only for layers that remain visible.
+
+The panel-wide Custom mode provides the same independent layers. A per-spacer mode always wins over the panel default. Select an entity in **Convert to lamp** to convert the spacer into a normal Standard ON/OFF status lamp.
 
 ## 7. Lamp types
 
@@ -356,7 +440,25 @@ Legacy mode preserves old severity/ON Window precedence where practical. The vis
 
 ## 10. Global colors
 
-Open **Panel Settings → Appearance**.
+Open **Panel settings → Appearance**.
+
+### Saved appearance presets
+
+Open **Appearance presets** at the top of the panel Appearance page. Enter a **Preset name** and choose **Save as new** to capture the current panel-wide look. When a **Saved preset** is selected:
+
+- **Apply** changes the current panel-wide appearance to the saved look.
+- **Update** replaces the saved look with the current appearance and any edited name.
+- **Delete** removes only that preset.
+
+Presets are saved under `appearance_presets` inside the card configuration, so they travel with dashboard backups and work on other devices. They snapshot the panel theme; default lamp style and lens; panel, header, and spacer appearance; global and severity colors/material mapping; optical-effect defaults; and the global lamp-brightness profile. They never snapshot lamp/entity entries, per-lamp overrides, grid dimensions, positions or spans, header tallies/controls, acknowledgement state or policy, interactions, rules, or alarm output. Saving a preset does not apply it, and applying one is explicit and undoable in the editor.
+
+### Saved lamp appearance presets
+
+Open a lamp in **Full editor → Appearance → Lamp appearance presets**. Enter a style name and use **Save as new** to capture that lamp's visual choices. **Apply**, **Update**, and **Delete** work like the panel preset controls. If Bulk edit is active, **Apply to selected** applies the style to every selected operational lamp, including both halves of a selected valid pair.
+
+Lamp presets are stored under `lamp_appearance_presets` and travel with the card. They include color behavior and custom colors, lamp font, icon size and optional icon color, shape, translucent illumination, Modern/Retro style, lens material, and the per-lamp brightness profile. They intentionally exclude the source entity or Derived base, lamp name and display text, icon identity, lamp type and severity, alert/ACK behavior, rules, interactions, group, pair metadata, and row/column spans. This boundary makes one style reusable without accidentally changing what a lamp means or does.
+
+Explicit custom lamp, global, and header color pairs are checked for readable contrast. Text warnings use a 4.5:1 target and icon warnings use 3:1. Warnings are advisory and never block saving. Theme variables, transparency, and CSS colors the editor cannot resolve reliably are not guessed. Complex per-lamp fields provide an adjacent inheritance reset for font, shape, lamp style, lens, brightness, and ACK rearm; icon color can similarly return to **Follow lamp text**, and spacer appearance can return to the panel default.
 
 ### Master global color switch
 
@@ -389,12 +491,46 @@ These are primarily used by Severity/Legacy lamps and by rules that change sever
 - OFF text
 - Unavailable text
 - Blank spacer
-- Frame
+- Frame fallback
 - Panel
 
-On new cards, **Frame** and **Panel** overrides are disabled so Classic/Avionics/Neon can visibly own those surfaces. Enable the overrides only when you want to force specific panel/frame colors.
+On new cards, **Frame fallback** and **Panel** overrides are disabled so Classic/Avionics/Neon can visibly own those surfaces. The fallback remains available for older YAML and theme compatibility.
+
+### Outer panel frame and lamp frames
+
+The **Outer frame** color changes the panel/grid frame. **Lamp frame source** independently decides what surrounds each lamp lens, including Pill, Square, Circle, and Indicator dot shapes:
+
+- **Follow outer frame (compatibility)** keeps the existing v1.1 local-candidate behavior. An explicit outer-frame override is also used for lamp frames.
+- **Theme / default bezel** keeps lamp frames on the selected Classic, Avionics, or Neon bezel even when the outer frame has a custom color.
+- **Custom lamp frame color** reveals **Lamp frame / bezel**, allowing one card-wide lamp-frame color that does not change the outer frame.
+
+Existing saved configurations without `lamp_frame_mode` normalize to **Follow outer frame (compatibility)**, so opening the new editor does not silently alter their appearance. The shaped bezel follows the selected lamp geometry rather than drawing a rectangular border around it.
+
+### Quick None switches
+
+Open **Panel settings → Appearance → Quick appearance** for the shortest path to a frameless or floating-lens layout:
+
+- **No panel background**, **No panel border**, and **No panel frame** control the three panel layers independently.
+- **No lamp bezels** removes rectangular and shaped bezels, including their frame shadows. It does not affect spacer styling.
+- **No lens borders** removes the line directly around each lens while leaving the selected bezel visible.
+
+These switches do not erase a saved custom color. Turning a switch off restores the previous theme/override source. All switches default off, so v1.0.2 configurations are visually unchanged.
+
+When one or more panel/frame layers are disabled here, **Panel & frames** lists the hidden layers instead of opening to an unexplained blank section. If all four of its surfaces are disabled, select **Edit visibility** to return directly to **Quick appearance** and restore any layer you want to configure.
 
 ## 11. Display lines and templates
+
+### Text or icon content
+
+Open a lamp's **Display** tab and choose **Content**:
+
+- **Text** is the unchanged compatibility default and uses the normal display lines below.
+- **Icon only** replaces Primary, Secondary, and Tertiary with an icon. The unavailable INOP indicator remains visible.
+- **Icon + selected lines** places the icon above any combination of Primary, Secondary, and Tertiary.
+
+For either icon mode, **Icon** uses Home Assistant's icon selector. Leave it blank to use the entity's icon; if the entity does not declare one, the card uses a safe domain fallback. **Icon size** accepts 12–160px, with shaped lenses constraining oversized icons. **Icon color** can follow the lamp text, use one custom color, or use separate **ON icon color** and **OFF icon color** values. Unavailable icons always follow the unavailable text color so INOP remains legible. Existing single-color overrides automatically open as **One custom color**. In **Icon + selected lines**, **Text with icon** contains independent **Show primary**, **Show secondary**, and **Show tertiary** switches. A selected line that resolves to blank takes no space. Each paired half has its own icon and line settings.
+
+**Lamp font** normally uses Panel / built-in default. Choose a font preset or **Custom CSS font** for one lamp; **Custom font** accepts an installed font name or CSS stack such as `"DIN Condensed", sans-serif`. The browser must already have the font—the card does not download fonts. The live **Font preview** specimen uses the same resolved stack as the lamp and shows the exact stack on hover. Theme/default and System may intentionally look alike. Condensed tries Arial Narrow, Roboto Condensed, and Liberation Sans Narrow before its fallback. The panel-wide **Lamp font** and conditional **Custom lamp font** controls are under **Panel settings → Layout**. Text-only lamps remove the unused icon element from layout so their text stays vertically centered.
 
 ### Normal display mode
 
@@ -403,19 +539,31 @@ Primary options:
 - Custom text
 - Label
 - State / value
+- ON / OFF labels
+- Dynamic text rules
 
 Secondary and Tertiary options:
 
 - None
 - Custom text
 - State / value
+- ON / OFF labels
+- Dynamic text rules
 - Entity ID
 - Last changed
 - Last updated
 
+**ON / OFF labels** is the simple state-aware choice. Each line gets editable **ON text**, **OFF text**, **Unavailable text**, and **Unknown text**. ON/OFF uses the final logical lamp state after its condition, invert, Always ON, a rule's Force ON/OFF result, and Lamp Test. This makes a lamp show values such as `ACTIVE` while ON and `TRIP` while OFF without a template or helper entity.
+
+**Dynamic text rules** is the advanced choice. Each line has an optional **Fallback text** and up to 24 ordered rules; the first enabled match wins. A rule can match Lamp ON, Lamp OFF, Unavailable/missing, Unknown, exact source state, **String match**, **Numeric threshold**, **ACK stored**, **No ACK stored**, **Main alert active**, or **Main alert inactive**. ACK refers to this lamp's stored acknowledgement. Main alert requires a configured visual Alert effect whose Alert when condition currently matches. State/string checks read the lamp's current source state, while Numeric threshold reads the transformed logic value after conversion, scale, and offset. **Text to match** appears for String match, and **Display text** is the result written to that line. Rules change text only; they do not change the lamp's logical state, color, severity, alert, or Home Assistant entity.
+
+The read-only **Current display** line summarizes content, enabled display lines, font source, and dynamic-rule count. Open **Copy display settings**, choose the **Source lamp**, and select **Copy to this lamp** to copy its content mode, icon settings, font, line modes/text, dynamic text rules, templates, and value formatting. The selected lamp keeps its entity, name, alarm/ACK behavior, appearance, pairing, spans, interactions, group, UID, and ACK slot. One copy creates one undo step.
+
+Unavailable/Unknown rules or labels can replace the normal INOP wording. If no such dynamic rule matches, the standard INOP indicator remains visible. This prevents a generic fallback from accidentally hiding an unavailable condition. Templates still take priority when **Use templates** is enabled.
+
 ### Lightweight templates
 
-Enable **Use templates** to replace the normal line selectors with two substitution strings.
+In Text or Icon + selected lines mode, enable **Use templates** to replace the normal line selectors with two substitution strings.
 
 Available variables include:
 
@@ -481,6 +629,8 @@ A numeric rule whose source is **Another entity** uses that external entity's **
 
 Open the Behavior tab.
 
+The read-only **Current behavior** line summarizes the main alert, Alert when condition, effective ACK-rearm source, audible participation, and change-alert state. Per-lamp ACK rearm has an adjacent **Use panel default** action so a saved override can be removed explicitly.
+
 ### Alert effects
 
 - None
@@ -501,12 +651,14 @@ An OFF-state alert is useful for conditions such as “pump not running.”
 
 ### ACK rearm
 
-When an alert effect is active:
+Open **Panel settings → Acknowledgement → Default ACK rearm** to choose the new-lamp panel default. Then use **Behavior → ACK rearm** on an individual lamp to select **Use panel default**, **Manual**, or **Automatic**.
 
-- **Manual** — ACK remains stored until Clear ACK.
-- **Automatic** — stored ACK clears when the configured alert condition returns to normal.
+- **Manual** — ACK remains stored until **CLEAR ACKNOWLEDGED** or a per-lamp Clear ACK action removes it.
+- **Automatic** — stored ACK clears only when the configured ON/OFF alert condition returns to normal.
 
-Automatic rearm needs a normal/non-alert state. If **Alert when = ON or OFF**, the alert condition is always eligible, so automatic rearm cannot naturally occur.
+Rearm follows the condition even when **Alert effect = None**; visual animation is not used as a proxy for alarm state. An unavailable/unknown source does not clear ACK. Automatic rearm also needs a normal/non-alert state. If the **Alert when** choice is **ON or OFF** (`both`), the condition is always eligible, so automatic rearm cannot naturally occur.
+
+Compatibility is deliberate: an existing v1.0.2 lamp without `ack_rearm` normalizes to Manual. New lamps store `ack_rearm: inherit`, so changing **Default ACK rearm** can update their effective behavior without rewriting every lamp. An existing explicit Manual or Automatic lamp changes only if you select **Use panel default** for it.
 
 ### Effect tuning
 
@@ -543,43 +695,23 @@ Clear ACK removes both the main and change ACK state for that lamp. With Pair AC
 
 ACK actions are blocked while Lamp Test is active so a test cannot accidentally change stored operator acknowledgement state.
 
-## 15. ACK ALL and CLEAR ACK header controls
+## 15. Header alarm controls
 
-Open **Panel Settings → Acknowledgement**.
+Open **Panel settings → Acknowledgement**.
 
-New cards can show both buttons independently.
+New cards can show five controls independently in this fixed order:
 
-### ACK ALL
+- **ACKNOWLEDGE** — acknowledges only alert channels that are currently active. It does not toggle source entities or pre-acknowledge inactive lamps. Pair ACK Lock is respected.
+- **SILENCE** — stops the current panel alarm output without acknowledging it. A newly arriving participating alarm can re-sound the output.
+- **RESET** — rearms cleared latched alarm state without changing a source entity.
+- **LAMP TEST** — toggles the configured helper or starts the built-in three-second test.
+- **CLEAR ACKNOWLEDGED** — clears stored acknowledgement for the current panel namespace so applicable alerts can indicate again.
 
-**ACK ALL** scans the panel and acknowledges only alert channels that are currently active.
+Every control has an independent visibility switch and optional custom label. Presentation mode hides the controls, and Lamp Test blocks ACK mutations. With persistent `input_text` storage, CLEAR ACKNOWLEDGED preserves ACK data belonging to other panel namespaces in the same helper.
 
-It does not:
+### Compatibility
 
-- toggle or change Home Assistant entities;
-- pre-ACK inactive lamps;
-- modify Lamp Test;
-- run in Presentation mode.
-
-If Pair ACK Lock is enabled, linked pair behavior is respected.
-
-### CLEAR ACK
-
-**CLEAR ACK** clears stored acknowledgement for the current panel namespace so applicable alerts can indicate again.
-
-For persistent `input_text` storage, the card preserves ACK data belonging to other panel namespaces in the same helper.
-
-### Show/hide controls
-
-The two header buttons are independent:
-
-- Show ACK ALL
-- Show CLEAR ACK
-
-You can show both, either one, or neither.
-
-### v1.x compatibility
-
-Old single-header-button settings are still accepted. A legacy Clear-only configuration remains Clear-only; an old ACK-All configuration remains ACK-All. A minimal old configuration with no explicit header keys keeps the historical Clear ACK-only default.
+v1.0.2 **ACK ALL** and **CLEAR ACK** settings and older single-header-button settings are still accepted. Existing configurations keep their saved visibility and labels when migrated. New cards use the longer ACKNOWLEDGE and CLEAR ACKNOWLEDGED labels.
 
 ## 16. Change alerts
 
@@ -617,6 +749,8 @@ Speed, opacity, border emphasis, wave radius, and throb subtlety can inherit the
 
 Changing card configuration does not intentionally manufacture a fake source-state change.
 
+For a Derived lamp, change detection follows its resolved final ON/OFF state after ordered rules. An external rule that changes Force ON/Force OFF can therefore trigger the configured change alert, while rerenders that leave the final state unchanged do not repeatedly trigger it.
+
 ## 17. Configurable Tap, Double tap, and Long press
 
 Open the Interaction tab.
@@ -635,6 +769,9 @@ Available actions:
 - Turn Off
 - Acknowledge
 - Clear ACK
+- Perform Action / service
+- Navigate
+- Open URL
 - None
 
 Defaults:
@@ -656,6 +793,10 @@ If Another entity is selected but no entity is chosen, the action is a safe no-o
 
 Toggle / Turn On / Turn Off use Home Assistant's `homeassistant.toggle`, `homeassistant.turn_on`, or `homeassistant.turn_off` service with the selected `entity_id`.
 
+Perform Action uses a Home Assistant `domain.service` value. The visual editor exposes the service name; optional `<gesture>_service_data` and `<gesture>_service_target` objects remain available in YAML. A service target is passed through Home Assistant's target parameter rather than being mixed into service data.
+
+Navigate accepts a local Home Assistant path such as `/lovelace/alarms`. Open URL accepts a normal URL and rejects executable schemes such as `javascript:` or `data:`. Missing, malformed, or unsafe action details are shown by the configuration check and remain safe no-ops without a clickable affordance.
+
 ### Gesture arbitration
 
 The card waits long enough to determine the intended gesture before running the action.
@@ -675,7 +816,7 @@ Enable **Conditional Rules** on the Rules tab.
 
 Rules are evaluated in order. **First matching rule wins.** Reorder them to make priority explicit.
 
-### WHEN types
+### When types
 
 - Numeric threshold
 - State equals
@@ -698,12 +839,20 @@ Changing severity only changes color if the lamp is in Severity or Legacy color 
 
 Rule Force ON / Force OFF is applied after normal condition, Invert, and Always ON. Lamp Test still has final authority.
 
+### Live rule trace
+
+Open **Full editor → Rules → Live rule trace** to inspect the current evaluation without changing configuration. The trace uses the same rule-condition evaluator as the runtime and shows the current source/state, whether each rule matched, why a rule was skipped, and which first match won. Its exact reason text is: **Disabled**, **Missing or unsupported condition**, **Missing source entity**, **Source entity not found**, **Source unavailable**, **Source unknown**, **Source is not numeric**, **Numeric threshold did not match**, **State did not match**, **String comparison did not match**, **Matched**, or **Not evaluated because an earlier rule matched**.
+
+Use **Refresh trace** after changing a Home Assistant source state if the editor is already open. The trace is diagnostic only: it does not call a service, acknowledge an alarm, trigger an interaction, or save anything. ACK, Lamp Test, and temporary change-alert timers are intentionally not simulated; the rendered card remains authoritative for those transients and for audible-output/service-execution state.
+
 ## 19. Cross-entity rules
 
 Rule source can be:
 
 - This lamp entity
 - Another entity
+
+For a Derived lamp, the first choice is labeled **Derived base state**. **Another entity** is normally the useful choice and watches the selected Home Assistant source directly.
 
 Examples:
 
@@ -742,6 +891,8 @@ Each half keeps its own:
 
 The pair shares one physical grid position and is kept adjacent/canonicalized automatically.
 
+Use **Add paired lamp** for the fastest setup. It creates TOP and BOTTOM as lamps even before their entities are selected, gives each half its own stable UID and ACK slot, and opens the TOP entity picker. After choosing the TOP entity, select the BOTTOM half in the paired navigator and choose its entity. Neither unfinished half becomes a spacer or loses its Pair ID. The individual **Pair with lamp** control remains available for combining two existing independent lamps.
+
 ### Top / Bottom
 
 Changing one half from TOP to BOTTOM automatically swaps its partner.
@@ -752,7 +903,7 @@ When enabled, acknowledgement/clear operations on one half also apply to the par
 
 ## 21. Groups
 
-Set the same **Group** text on related lamps.
+Set the same **Group** text on related lamps. Quick setup and Full editor suggest the exact names already used by the card; choose a suggestion to avoid accidental variants, or type a new name deliberately. Group matching is case-sensitive, so `Boiler Room` and `boiler room` are different groups. Assigning a group to one half of a valid pair applies the same group to its partner.
 
 Panel group options include:
 
@@ -761,7 +912,7 @@ Panel group options include:
 - Include change alerts
 - Show group ACK/Clear buttons
 - Compact icon or text buttons
-- Optional ACK Alerts button
+- Optional ACK alerts button
 - Header background
 - Header text color
 - Bottom divider
@@ -790,7 +941,7 @@ Lens material changes the physical finish/optics, not the lamp's logical ON/OFF 
 
 ### Per-lamp override locks
 
-Panel Settings can disable per-lamp style or lens overrides. When locked, the lamp editor visibly disables those selectors instead of letting them appear to change something that will not render.
+Panel settings can disable per-lamp style or lens overrides. When locked, the lamp editor visibly disables those selectors instead of letting them appear to change something that will not render.
 
 ## 23. Panel themes and appearance
 
@@ -802,13 +953,66 @@ Themes:
 
 The selected theme controls panel/bezel styling when Frame/Panel global overrides are disabled.
 
+### Header appearance
+
+Open **Panel settings → Appearance → Header**. Every setting is optional; leaving its override off preserves the existing Home Assistant/theme appearance.
+
+- **Header background** controls the surface behind the title, tallies, and controls.
+- **Header border** and **Header border width** style the complete header edge.
+- **No header background** and **No header border** remove those complete layers independently.
+- **Title text** and **Tally text** have independent font colors. Tally text applies to every live and historical tally.
+- **Button text**, **Button background**, **Button hover background**, **Button border**, and **Button border width** style all five controls consistently.
+- **No button backgrounds** keeps the buttons operable but removes both normal and hover fills. **No button borders** removes their outlines.
+- **Header font** selects Theme/default, Condensed sans-serif, System sans-serif, Monospace, Serif, or Custom CSS font. **Custom header font** accepts an installed font name or CSS font stack. Its **Font preview** uses the same browser-resolved stack as the title, tallies, and buttons.
+- **Header font weight** optionally applies a shared weight while preserving the original title/tally/button weights when left at Component defaults.
+- Optional title, tally, and button font-size overrides are measured in pixels. The tally size also applies on mobile.
+- Optional button corner radius accepts `0` for square controls or a rounded pixel radius.
+
+These controls change appearance only. Header order, button behavior, tally calculations, SILENCE semantics, and presentation-mode restrictions remain unchanged.
+
+### Historical alarm tallies
+
+Open **Panel settings → Acknowledgement → Historical alarm tallies** to enable **ALARM DAY**, **ALARM WEEK**, **ALARM MONTH**, and **ALARM YEAR** independently. Each enabled tally exposes **Custom label**; leave it blank to restore its default.
+
+**Tally source** has two choices:
+
+- **Local browser observations** is the compatibility default. The card counts Alarm/Trip lamp arrivals it observes over rolling 24-hour, 7-day, 30-day, and 365-day windows. A continuously active alarm counts once; ordinary card updates and reloads do not add duplicates. After a lamp returns to normal, its next Alarm/Trip activation counts as another arrival.
+- **Home Assistant entities** reads one optional sensor/entity for each enabled period. This is the right choice when phones, tablets, and wall panels should display one shared value or when a Home Assistant integration/automation maintains the authoritative count. The card displays the entity's finite non-negative numeric state. A missing entity, `unknown`, `unavailable`, nonnumeric state, negative value, or non-finite value displays `—`, never a misleading zero.
+
+Local history is namespaced by **Panel ID** in this browser. It records only transitions seen while a card instance is running; it cannot backfill alarms that occurred while every relevant dashboard was closed, asleep, or disconnected. Clearing browser site data removes it. **Reset alarm history → Clear saved alarm totals** clears only the local totals and baselines currently active alarms so they remain at zero until they clear and reactivate. ACK state, entities, and Home Assistant Recorder data are not changed.
+
+Entity-backed mode skips local event tracking, storage reads/writes, and expiry timers. It hides the local reset control because the card is read-only with respect to those sensors. Create and maintain the Day/Week/Month/Year source entities in Home Assistant using the automation, helper, integration, or statistics approach appropriate to your installation; the card does not create, increment, clear, validate the time window of, or backfill them.
+
+See [`examples/shared-historical-tallies.yaml`](../examples/shared-historical-tallies.yaml) for the card-side configuration.
+
+### Lamp brightness profiles
+
+Open **Panel settings → Appearance → Lamp lighting** and choose a **Brightness profile**. Under a lamp's Quick/Full editor or **Appearance → Lens & light**, use **Brightness** for a local override or choose **Inherit** to use the panel profile. **Brightness** in Bulk edit stages a profile and changes nothing until its adjacent Apply button is selected.
+
+| Profile | OFF | ON | ALERT |
+| --- | ---: | ---: | ---: |
+| Full brightness (`normal`) | 100% | 100% | 100% |
+| Dim when OFF (`dim_off`) | Dim level | 100% | 100% |
+| Dim when ON (`dim_on`) | 100% | Dim level | 100% |
+| Dim while not alerting (`dim_non_alert`) | Dim level | Dim level | 100% |
+| Dim all states (`dim_all`) | Dim level | Dim level | Dim level |
+| Custom levels (`custom`) | OFF brightness | ON brightness | Alert brightness |
+
+Canonical **Dim level** accepts 10–100% and defaults to 32%; 100 is preserved as a deliberate no-dim setting. Under Custom, **OFF brightness**, **ON brightness**, and **Alert brightness** each accept 10–100%; their defaults are Dim level, 100%, and 100%. Only finite numbers or nonblank numeric text are accepted; malformed null, blank, non-finite, boolean, array, or object values use those defaults. The editor's **OFF · ON · ALERT** preview displays the resolved levels and refreshes as you edit them. Reading that preview or merely opening Lamp lighting, a lamp editor, or Bulk edit does not change configuration, lamp state, ACK, or Home Assistant services.
+
+Runtime precedence is fixed: an unavailable/unknown/missing entity uses the full-brightness INOP treatment, and Lamp Test forces 100%. Next, an active main alarm condition or change alert uses Alert brightness—even after the visual alert is acknowledged. Otherwise, the lamp's resolved final ON/OFF state selects ON or OFF brightness. Paired halves resolve independently. The Lamp Test decision is captured once for a complete render so a short test timer cannot expire between state evaluation and brightness application.
+
+The old Dim until active behavior remains compatible. A valid canonical `lamp_brightness` object wins. A malformed or profile-less object is ignored/removed so it cannot mask the old fields. Without a valid canonical object, global `inactive_lamp_default: normal` maps to `lamp_brightness.profile: normal`, `inactive_lamp_default: dim` maps to `profile: dim_off`, and `inactive_lamp_brightness` maps to `dim_level` after its historical 10–90 normalization. Per lamp, `inactive_lamp_mode: inherit`, `normal`, or `dim` maps to `profile: inherit`, `normal`, or `dim_off`. Missing canonical and legacy fields resolve to Normal/full. Loading or opening an old card does not rewrite those aliases; a canonical object is saved only after the user deliberately edits the new brightness controls.
+
 ### Stable lens imperfections
 
 Adds repeatable per-lamp surface variation. The imperfection system is separate from the material glare strength so it does not erase the visible difference between Plastic/Glass/Frosted/Smoked.
 
 ### Retro flicker
 
-Optional subtle flicker effect for retro-style lamps.
+Optional visible incandescent flicker for active Retro lamps. It uses irregular stepped brightness changes rather than a smooth pulse. The lamp must be ON and resolved to the Retro style; Modern and OFF lamps intentionally do not flicker. When Blink, Pulse, Wave, Throb, Heartbeat, or Flash is actively demanding attention, that alert effect temporarily owns lens brightness and Retro Flicker pauses instead of multiplying two unrelated animation cycles. Flicker resumes automatically after the alert is acknowledged or becomes inactive. All animation is disabled when the browser or operating system requests reduced motion.
+
+Retro translucent lenses retain distinct material treatments: Plastic is softly diffused, Glass retains directional glare, Frosted retains its fine texture, and Smoked remains attenuated. Alert effects preserve those material characteristics.
 
 ### Severity appearance mapping
 
@@ -830,9 +1034,9 @@ This is independent of normal Standard ON/OFF color behavior unless severity is 
 
 ### Panel sizing
 
-- **Auto Fit** — preserve configured proportions and scale down only when needed.
-- **Fixed Size** — use configured pixel dimensions with no scaling.
-- **Horizontal Scroll** — preserve full size and allow horizontal scrolling.
+- **Auto fit** — preserve configured proportions and scale down only when needed.
+- **Fixed size** — use configured pixel dimensions with no scaling.
+- **Horizontal scroll** — preserve full size and allow horizontal scrolling.
 
 ### Layout controls
 
@@ -854,7 +1058,7 @@ Panel height calculations use occupied physical cells and account for group head
 
 ## 25. Lamp Test
 
-Choose a Home Assistant toggle entity under **Panel Settings → Advanced → Lamp test entity**.
+Choose a Home Assistant toggle entity under **Panel settings → Advanced → Lamp test entity**.
 
 When the helper is ON, every populated window can be tested, even if its normal source entity is unavailable.
 
@@ -891,7 +1095,7 @@ If a Presentation panel has no title or other required header control, it does n
 
 ### Local browser
 
-Requires no helper. ACK state is stored in browser local storage and is specific to that browser/device.
+Requires no helper. ACK state is stored in browser local storage and is specific to that browser/device. Clearing site data removes it, and another browser or device does not see it.
 
 ### Persistent `input_text`
 
@@ -908,9 +1112,11 @@ The v1.x/v1.0.2 ACK system uses:
 
 A helper max length around 255 is recommended.
 
+The card still performs ACK reads and writes from the connected browser. The signed-in user must be allowed to read the helper and call `input_text.set_value`, and a disconnected or rejected write can fall back to local state. The helper shares card ACK state; it does not acknowledge or reset the underlying Home Assistant entity, and it does not turn the card into a server-side alarm controller. Avoid assigning unrelated panels the same `panel_id` and helper unless shared acknowledgement is intentional.
+
 ## 28. Diagnostics and support package
 
-Enable **Panel Settings → Advanced → Diagnostics overlay**.
+Enable **Panel settings → Advanced → Diagnostics overlay**.
 
 The overlay can expose useful runtime information such as:
 
@@ -1045,7 +1251,7 @@ Per-lamp style/lens can win only if panel-wide per-lamp overrides are allowed. O
 | Main + Change active | one ACK handles both active channels | channels rearm independently |
 | Already ACKed | Acknowledge is a no-op | Clear ACK removes stored ACK |
 | Pair ACK Lock | active half and linked partner follow pair behavior | Clear also follows pair lock |
-| ACK ALL | only active panel alert channels are ACKed | CLEAR ACK clears panel ACK namespace |
+| Header ACKNOWLEDGE | only active panel alert channels are ACKed | CLEAR ACKNOWLEDGED clears the panel ACK namespace |
 | Lamp Test active | ACK mutation blocked | ACK mutation blocked |
 | Presentation mode | ACK blocked | ACK blocked |
 
@@ -1059,6 +1265,9 @@ Per-lamp style/lens can win only if panel-wide per-lamp overrides are allowed. O
 | Turn Off | Yes | Yes | No |
 | Acknowledge | No | Yes | No |
 | Clear ACK | No | Yes | No |
+| Perform Action | No | Yes | No |
+| Navigate | No | Yes | No |
+| Open URL | No | Yes | No |
 | None | No | No action | No action |
 
 ### Color-mode matrix
@@ -1070,9 +1279,9 @@ Per-lamp style/lens can win only if panel-wide per-lamp overrides are allowed. O
 | Custom | Per-lamp ON | Per-lamp OFF | No, unless you intentionally use rule color |
 | Legacy | v1.x compatibility resolver | v1.x compatibility resolver | Yes according to old behavior |
 
-## 33. Upgrade notes for v1.0.0 / v1.0.1
+## 33. Upgrade notes for older releases
 
-v1.0.2 is designed to keep old dashboards working while simplifying new configuration.
+v1.1.0 is designed to keep older dashboards working while adding new configuration options.
 
 ### Existing color configuration
 
@@ -1082,7 +1291,7 @@ A lamp without `color_behavior` stays on Legacy compatibility. It is not silentl
 
 Legacy ON Window settings remain readable. The redundant ON Window picker is removed from the normal editor. When you deliberately convert a legacy lamp to Custom ON/OFF, the migration preserves the color that actually had visual priority.
 
-### Header ACK button
+### Header controls
 
 The old fields remain readable:
 
@@ -1090,7 +1299,7 @@ The old fields remain readable:
 - `reset_ack_action`
 - `reset_ack_label`
 
-The new UI uses independent `show_ack_all` and `show_clear_ack` controls with standardized button text. Old behavior is mapped safely.
+v1.0.2 `show_ack_all` and `show_clear_ack` values and the older fields above are mapped safely into `header_controls`. Existing saved labels are retained; new cards use ACKNOWLEDGE, SILENCE, RESET, LAMP TEST, and CLEAR ACKNOWLEDGED.
 
 ### New lamps
 
@@ -1216,8 +1425,11 @@ This keeps advanced template logic in Home Assistant where it is natively suppor
 - Use Custom ON/OFF only when one lamp truly needs unique colors.
 - Put highest-priority Conditional Rules first.
 - Name important rules for diagnostics.
+- Use Live rule trace before changing a complex rule chain; it explains the current first-match result without operating anything.
 - Give separate panels unique `panel_id` values.
 - Use persistent ACK only when shared operator state is useful.
+- Use Home Assistant entity-backed historical tallies when values must agree across devices or include periods when no dashboard was open.
+- Treat card alarm output as operator-interface feedback. Use Home Assistant automations for unattended, server-owned, or critical notifications.
 - Test Lamp Test and ACK behavior before relying on an operator workflow.
 - Use Presentation mode for read-only display dashboards.
 - Keep paired lamps and group members visually/structurally organized.
@@ -1234,11 +1446,31 @@ The main sections above explain the workflows. This final index calls out editor
 
 ### Display text and templates
 
+- **Content** — Text, Icon only, or Icon + selected lines. Existing lamps normalize to Text.
+- **Icon** — optional Home Assistant icon override; blank uses the entity/domain fallback.
+- **Icon size** — 12–160px before shape-aware fitting.
+- **Icon color** — Follow lamp text, One custom color, or Separate ON / OFF colors. Unavailable follows unavailable text.
+- **Custom icon color** — single icon color used in One custom color mode.
+- **ON icon color** — icon color for the final logical ON state.
+- **OFF icon color** — icon color for the final logical OFF state.
+- **Text with icon** — compact group containing independent Show primary, Show secondary, and Show tertiary switches.
+- **Lamp font** — inherit the panel/built-in default or choose Condensed, System, Monospace, Serif, or Custom CSS font.
+- **Custom font** — installed font name or CSS stack for one lamp; displayed only for Custom CSS font.
+- **Custom header font** — installed font name or CSS stack for the header; displayed only for Custom CSS font.
+- **Font preview** — live specimen rendered with the resolved lamp, panel-lamp, or header font stack; hover it to inspect the exact stack.
 - **Primary template** — first display line when lightweight card templates are enabled.
 - **Secondary template** — second display line when lightweight card templates are enabled.
 - **Primary text** — literal first-line text when Primary is set to Custom.
 - **Secondary text** — literal second-line text when Secondary is set to Custom.
 - **Tertiary text** — literal third-line text when Tertiary is set to Custom.
+- **ON text** / **OFF text** — per-line text selected from the final logical state in ON / OFF labels mode.
+- **Unavailable text** / **Unknown text** — per-line replacement for unavailable/missing and unknown states.
+- **Fallback text** — dynamic-line result when no enabled text rule matches; it does not by itself hide INOP.
+- **Add text rule** — adds an ordered, enabled starter rule; maximum 24 per display line.
+- **Rule name** / **Rule enabled** — optional editor identity and skip switch for a dynamic text rule.
+- **When** — dynamic text condition: logical state, availability, source state/string/numeric value, ACK, or alarm condition.
+- **Text to match** — source-state text used by Contains, Equals, Starts with, or Ends with.
+- **Display text** — text written to the selected Primary, Secondary, or Tertiary line when the rule wins.
 
 These template fields use the card's built-in substitutions; they do not execute Home Assistant Jinja.
 
@@ -1253,14 +1485,26 @@ These template fields use the card's built-in substitutions; they do not execute
 
 ### Pair controls
 
+- **Add paired lamp** — creates TOP/BOTTOM unfinished lamp halves as one physical cell, assigns their Pair ID automatically, and opens entity selection.
 - **Pair with lamp** — selects another lamp to form one physical TOP/BOTTOM cell.
 - **This half** — chooses whether the selected lamp is TOP or BOTTOM. Changing it swaps the partner automatically so the pair remains valid.
 
 ### Conditional Rule fields
 
+- **Data source** — Home Assistant entity or Derived — rules only. Derived lamps do not require a primary entity.
+- **Base state** — Derived lamp fallback OFF/ON state used when no rule matches.
 - **Rule name** — optional operator/maintainer-friendly name shown in diagnostics.
-- **THEN severity** — changes the resolved severity. It changes the visible color only in Severity/Legacy color behavior unless the rule also specifies an explicit ON color.
-- **THEN alert** — Inherit, Off, Blink, Pulse, Wave, Throb, Heartbeat, or Flash for the matching rule.
+- **Then severity** — changes the resolved severity. It changes the visible color only in Severity/Legacy color behavior unless the rule also specifies an explicit ON color.
+- **Then alert** — Inherit, Off, Blink, Pulse, Wave, Throb, Heartbeat, or Flash for the matching rule.
+- **Live rule trace** — read-only current-state explanation of every rule, including the first winner and skipped/invalid-source reasons. Refresh does not save or call a service.
+
+### Editor workflow fields
+
+- **Quick setup / Full editor** — transient editor view choice. Quick setup exposes common fields; Full editor exposes every tab. It is not stored in YAML.
+- **More options** — Quick setup shortcut containing **Open full editor**; no settings are lost.
+- **Bulk edit** — transient navigator selection with explicit per-setting Apply buttons. Valid pairs expand to both halves, and one Apply creates one undo point. Select this page, Select all lamps, and Clear manage selection only.
+- **Lamp appearance preset** — a named visual-only lamp style. It can be applied to one lamp or the current bulk selection without replacing semantic or layout fields.
+- **Saved style** — selected entry in the lamp appearance-preset library.
 
 ### Advanced lamp field
 
@@ -1268,20 +1512,48 @@ These template fields use the card's built-in substitutions; they do not execute
 
 ### Panel layout and appearance fields
 
-- **Corner style** — Rounded or Sharp physical cell/window corners.
+- **Panel corners** — optional radius for the complete panel background and outside border.
+- **Outer frame corners** — optional independent radius for the grid surround.
+- **Lamp bezel corners** — Rounded or Square inherited/Round rectangle lamp bezel and lens-border corners; explicit shapes retain their geometry.
+- **Lamp corner radius** — pixel radius shown when Lamp bezel corners is Rounded.
+- **Header corner radius** — optional radius for the complete header background and border.
+- **Button corner radius** — optional shared radius for header controls.
 - **Default lamp style** — panel-wide Modern or Retro default used by lamps that inherit the panel style.
 - **Default lens** — panel-wide Plastic, Glass, Frosted, or Smoked default used by lamps that inherit the panel lens.
 - **Lens realism** — enables stable per-lens imperfections/variation. The variation is deterministic and does not change the lamp's logical color or state.
+- **Saved preset** — selects one of the named portable panel-wide looks stored in the card configuration.
+- **Preset name** — name used by Save as new or Update; names are limited to 60 characters.
+- **Lamp lighting** — panel Appearance section for brightness profiles, levels, and the OFF · ON · ALERT preview.
+- **Brightness profile** — panel choice: Full brightness, Dim when OFF, Dim when ON, Dim while not alerting, Dim all states, or Custom levels.
+- **Brightness** — per-lamp Quick/Full editor and Bulk edit choice; offers the same profiles plus Inherit/Panel default.
+- **Dim level** — 10–100 percent shared level used by predefined dim profiles; default 32 percent. Legacy `inactive_lamp_brightness` aliases still use their historical 10–90 normalization.
+- **OFF brightness** — Custom-profile OFF intensity from 10–100 percent; defaults to Dim level.
+- **ON brightness** — Custom-profile ON intensity from 10–100 percent; defaults to 100 percent.
+- **Alert brightness** — Custom-profile active alarm/change-alert intensity from 10–100 percent; defaults to 100 percent.
+- **OFF · ON · ALERT preview** — read-only display of the three resolved levels; it does not change configuration, entities, ACK state, or alarm output.
 
-### Panel acknowledgement fields
+### Panel acknowledgement and header fields
 
 - **ACK input_text** — Home Assistant `input_text` helper used when ACK storage is Persistent input_text. The card uses compact/adaptive encoding and falls back locally if a safe persistent write cannot be completed.
-- **ACK ALL button** — Show/hide the panel-wide ACK ALL control. ACK ALL acknowledges only currently active alert channels.
-- **CLEAR ACK button** — Show/hide the panel-wide CLEAR ACK control. CLEAR ACK removes stored acknowledgement for the current panel namespace.
+- **ACKNOWLEDGE button** — Show/hide the panel-wide acknowledgement control. It acknowledges only currently active alert channels.
+- **SILENCE button** — Show/hide alarm-output silence without changing ACK state.
+- **RESET button** — Show/hide rearming of cleared latched alarm state.
+- **LAMP TEST button** — Show/hide the configured-helper or local lamp-test action.
+- **CLEAR ACKNOWLEDGED button** — Show/hide removal of stored acknowledgement for the current panel namespace.
+- **Custom label** — Optional independent display text for each of the five controls.
+- **Tally source** — Local browser or Home Assistant entities. Entity mode displays user-maintained sensor values and disables local history reset.
+- **Value entity** — source shown for each enabled entity-backed historical tally. Blank/missing, `unknown`, `unavailable`, nonnumeric, non-finite, or negative states render as `—`; a valid finite non-negative number is displayed in trimmed numeric form.
 
 ### Group field
 
+- **Group** — exact, case-sensitive group name. Existing names are suggested; assigning one half of a valid pair updates its partner.
+- **Existing groups** — read-only group membership summary on Panel settings → Groups.
 - **Button style** — chooses Compact icons or Text buttons for group-header controls.
+
+### Alarm-output fields
+
+- **Start script** — Script-mode entity invoked with `script.turn_on` when output begins.
+- **Silence script** — optional Script-mode entity invoked with `script.turn_on`, after a successful start, when SILENCE is selected, no active audible alarms remain, the sounding output configuration changes, or the card disconnects. Generic YAML `silence_action` is the fallback when this field is empty.
 
 ### Panel Advanced fields
 

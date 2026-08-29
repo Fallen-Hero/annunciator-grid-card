@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dynamic text and state icon color validation</title>
+  <style>
+    :root{color-scheme:dark;--primary-color:#42a5f5;--primary-text-color:#f5f7fa;--secondary-text-color:#b7c0ce;--divider-color:#566070;--card-background-color:#262b33}
+    *{box-sizing:border-box}body{margin:0;padding:18px;background:#15181d;color:var(--primary-text-color);font-family:system-ui,sans-serif}.host{max-width:1180px;margin:0 auto}.mobile .host{max-width:430px}h1{margin:0 0 6px;font-size:22px}.intro{margin:0 0 12px;color:var(--secondary-text-color)}.audit{padding:9px 11px;border:1px solid #8b6a28;border-radius:8px;background:#382c15;color:#ffe2a0;font-weight:700}.stage{min-width:0;margin-top:14px;padding:12px;border:1px solid #46505e;border-radius:10px;background:#20252c;overflow:hidden}annunciator-grid-card,annunciator-grid-card-editor{display:block;width:100%;min-width:0}ha-form select,ha-form input{width:100%;min-height:44px;border:1px solid #5b6675;border-radius:6px;padding:0 9px;background:#2d333c;color:#f5f7fa}ha-switch input{width:20px;height:20px}ha-icon{display:inline-flex;align-items:center;justify-content:center;font-size:calc(var(--mdc-icon-size,40px)*.72)}
+  </style>
+  <script>
+    window.browserErrors=[];addEventListener("error",e=>browserErrors.push(String(e.error?.stack||e.message)));addEventListener("unhandledrejection",e=>browserErrors.push(String(e.reason?.stack||e.reason)));
+    class MockHaSwitch extends HTMLElement{set checked(v){this._checked=!!v;this._render()}get checked(){return!!this._checked}connectedCallback(){this._render()}_render(){this.textContent="";const i=document.createElement("input");i.type="checkbox";i.checked=this.checked;i.onchange=()=>{this._checked=i.checked;this.dispatchEvent(new Event("change",{bubbles:true}))};this.append(i)}}
+    class MockHaForm extends HTMLElement{set schema(v){this._schema=v;this._render()}get schema(){return this._schema||[]}set data(v){this._data=v||{};this._render()}get data(){return this._data||{}}connectedCallback(){this._render()}_render(){this.textContent="";const e=this.schema[0];if(!e)return;if(e.selector?.select){const s=document.createElement("select");for(const o of e.selector.select.options||[]){const n=document.createElement("option");n.value=o.value;n.textContent=o.label;s.append(n)}s.value=String(this.data[e.name]??"");s.onchange=()=>this.dispatchEvent(new CustomEvent("value-changed",{bubbles:true,detail:{value:{[e.name]:s.value}}}));this.append(s)}else{const i=document.createElement("input");i.value=String(this.data[e.name]||"");this.append(i)}}}
+    class MockHaIcon extends HTMLElement{static get observedAttributes(){return["icon"]}connectedCallback(){this.textContent="◆"}attributeChangedCallback(){this.textContent="◆"}}
+    customElements.define("ha-switch",MockHaSwitch);customElements.define("ha-form",MockHaForm);customElements.define("ha-icon",MockHaIcon);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=checkpoint27-dynamic-text-icon"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <script>if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile")</script>
+  <main class="host">
+    <h1>Dynamic lamp text and icon colors</h1>
+    <p class="intro">Final ON/OFF labels, ordered rules, INOP replacement, icon colors, editor organization, and narrow-width overflow.</p>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <section class="stage"><annunciator-grid-card id="card"></annunciator-grid-card></section>
+    <section class="stage"><annunciator-grid-card-editor id="editor"></annunciator-grid-card-editor></section>
+  </main>
+  <script>
+    const states={"binary_sensor.mode":{state:"off",attributes:{friendly_name:"Mode",icon:"mdi:alarm-light"}},"sensor.pressure":{state:"72",attributes:{friendly_name:"Pressure",unit_of_measurement:"PSI"}},"binary_sensor.inop":{state:"unavailable",attributes:{friendly_name:"Unavailable"}}};
+    const hass={states,callService:async()=>{},language:"en"};
+    const controls={acknowledge:{enabled:false},silence:{enabled:false},reset:{enabled:false},lamp_test:{enabled:false},clear_acknowledged:{enabled:false}};
+    const config={type:"custom:annunciator-grid-card",config_version:3,panel_id:"dynamic-browser",columns:3,rows:1,cell_width:190,cell_height:130,header_controls:controls,entities:[
+      {uid:"mode",ack_slot:1,entity:"binary_sensor.mode",content_mode:"icon_text",icon_show_primary:true,icon_show_secondary:false,icon_show_tertiary:true,icon_color_mode:"state",icon_color_on:"#00ff55",icon_color_off:"#7777ff",primary_mode:"state_labels",tertiary_mode:"state_labels",dynamic_text:{primary:{labels:{on:"ACTIVE",off:"TRIP"}},tertiary:{labels:{on:"RUNNING",off:"STOPPED"}}}},
+      {uid:"pressure",ack_slot:2,entity:"sensor.pressure",primary_mode:"dynamic",secondary_mode:"state",dynamic_text:{primary:{fallback:"NORMAL",rules:[{enabled:true,name:"High pressure",kind:"numeric",text:"HIGH PRESSURE",rule:{type:"above",a:70,b:0,inclusive:true}}]}},shape:"round_rectangle"},
+      {uid:"inop",ack_slot:3,entity:"binary_sensor.inop",primary_mode:"state_labels",secondary_mode:"none",dynamic_text:{primary:{labels:{unavailable:"OUT OF SERVICE"}}}}
+    ]};
+    const card=document.getElementById("card"),editor=document.getElementById("editor");card.setConfig(config);card.hass=hass;editor.hass=hass;editor.setConfig(config);editor._selectedLamp=0;editor._editorMode="advanced";editor._page="display";editor._renderEditor();
+    const failures=[];
+    setTimeout(async()=>{
+      await card._runtimeRenderQueue;await card._renderDynamic();
+      const cells=[...card.shadowRoot.querySelectorAll("#grid>.cell")],mode=cells[0],pressure=cells[1],inop=cells[2],modeIcon=mode?.querySelector(".lampIcon");
+      if(mode?.querySelector(".primaryLine")?.textContent!=="TRIP"||mode?.querySelector(".tertiaryLine")?.textContent!=="STOPPED"||getComputedStyle(mode?.querySelector(".secondaryLine")).display!=="none")failures.push("off-label-lines");
+      if(getComputedStyle(modeIcon).color!=="rgb(119, 119, 255)")failures.push(`off-icon:${getComputedStyle(modeIcon).color}`);
+      if(pressure?.querySelector(".primaryLine")?.textContent!=="HIGH PRESSURE"||pressure?.querySelector(".secondaryLine")?.textContent!=="72 PSI")failures.push("numeric-rule");
+      if(inop?.querySelector(".primaryLine")?.textContent!=="OUT OF SERVICE"||inop?.querySelector(".inopLine")?.hidden!==true)failures.push("custom-inop");
+      card.hass={...hass,states:{...states,"binary_sensor.mode":{state:"on",attributes:{friendly_name:"Mode",icon:"mdi:alarm-light"}}}};await card._runtimeRenderQueue;
+      if(mode.querySelector(".primaryLine").textContent!=="ACTIVE"||mode.querySelector(".tertiaryLine").textContent!=="RUNNING"||getComputedStyle(modeIcon).color!=="rgb(0, 255, 85)")failures.push("on-transition");
+      const editorBody=editor.shadowRoot.getElementById("editor"),field=(label)=>[...editorBody.querySelectorAll(".field")].find(entry=>entry.querySelector(":scope>.label")?.textContent===label),values=(form)=>form?.schema?.[0]?.selector?.select?.options?.map(option=>option.value)||[];
+      if(JSON.stringify(values(field("Primary")?.querySelector("ha-form")))!==JSON.stringify(["custom","name","state","state_labels","dynamic"]))failures.push("primary-options");
+      if(!editorBody.textContent.includes("Primary state labels")||!["ON text","OFF text","Unavailable text","Unknown text"].every(label=>field(label)))failures.push("state-label-editor");
+      editor._config.entities[0]={...editor._config.entities[0],primary_mode:"dynamic",dynamic_text:{...editor._config.entities[0].dynamic_text,primary:{fallback:"NORMAL",rules:[{kind:"lamp_on",text:"ACTIVE"}]}}};editor._renderEditor();
+      const dynamicBody=editor.shadowRoot.getElementById("editor"),dynamicText=dynamicBody.textContent;if(!dynamicText.includes("Primary dynamic text")||!dynamicText.includes("First enabled match wins")||!dynamicText.includes("Display text")||![...dynamicBody.querySelectorAll("button")].some(button=>button.textContent==="+ Add text rule"))failures.push("dynamic-rule-editor");
+      editor._config.entities[0]={...editor._config.entities[0],content_mode:"icon_text",icon_color_mode:"state"};editor._renderEditor();const colorBody=editor.shadowRoot.getElementById("editor"),colorLabels=[...colorBody.querySelectorAll(".colorRow>.label")].map(node=>node.textContent);if(!colorLabels.includes("ON icon color")||!colorLabels.includes("OFF icon color"))failures.push("state-icon-editor");
+      const shell=editor.shadowRoot.querySelector(".shell");if(shell.scrollWidth>shell.clientWidth+1||colorBody.scrollWidth>colorBody.clientWidth+1)failures.push(`overflow:${shell.clientWidth}/${shell.scrollWidth}:${colorBody.clientWidth}/${colorBody.scrollWidth}`);
+      if(browserErrors.length)failures.push(`browser-errors:${browserErrors.length}`);
+      window.dynamicTextIconValidation={failures,errors:browserErrors,widths:{shell:[shell.clientWidth,shell.scrollWidth],body:[colorBody.clientWidth,colorBody.scrollWidth]}};
+      const audit=document.getElementById("audit");audit.textContent=failures.length?`Browser audit failed: ${failures.join(" · ")}`:"Browser audit passed: final ON/OFF labels · ordered numeric text rule · custom unavailable label · ON/OFF icon colors · organized editor · mobile/desktop overflow · no browser errors";document.body.dataset.status=failures.length?"fail":"pass";document.body.dataset.ready="true";
+    },220);
+  </script>
+</body>
+</html>

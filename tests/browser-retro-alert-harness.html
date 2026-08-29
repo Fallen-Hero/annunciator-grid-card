@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Retro translucent alert interaction validation</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; background: #202329; color: #f5f7fa; font-family: system-ui, sans-serif; }
+    h1 { margin: 0 0 6px; font-size: 22px; }
+    p { margin: 0 0 18px; color: #c6ccd7; }
+    .audit { padding: 9px 11px; border: 1px solid #8b6a28; border-radius: 8px; background: #382c15; color: #ffe2a0; font-weight: 700; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(210px, 1fr)); gap: 16px; align-items: start; }
+    .sample { min-width: 0; padding: 10px; border: 1px solid #4b5260; background: #292d35; border-radius: 8px; }
+    .sample h2 { margin: 0 0 8px; font-size: 14px; letter-spacing: .03em; }
+    annunciator-grid-card { display: block; width: 100%; }
+    @media (max-width: 980px) { .cards { grid-template-columns: repeat(2, minmax(210px, 1fr)); } }
+    @media (max-width: 520px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+  </style>
+  <script>
+    window.browserErrors = [];
+    addEventListener("error", (event) => browserErrors.push(String(event.error?.stack || event.message)));
+    addEventListener("unhandledrejection", (event) => browserErrors.push(String(event.reason?.stack || event.reason)));
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=checkpoint16c"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <h1>Retro translucent lens × alert effects</h1>
+  <p>The steady sample should retain subtle incandescent flicker. Active alerts should own the animation without a second competing flicker cycle.</p>
+  <p id="audit" class="audit">Running browser audit…</p>
+  <div id="cards" class="cards"></div>
+  <h1 style="margin-top:24px">Retro translucent materials with Pulse</h1>
+  <p>Material filtering must remain present while the alert animation runs.</p>
+  <div id="materials" class="cards"></div>
+  <h1 style="margin-top:24px">Paired Retro translucent lamps</h1>
+  <p>The alerting half should suppress its flicker; the steady half should retain it.</p>
+  <div id="pairs" class="cards"></div>
+  <script>
+    const effects = ["none", "blink", "pulse", "wave", "throb", "heartbeat", "flash"];
+    const states = Object.fromEntries(effects.map((effect) => [`binary_sensor.${effect}`, { state: "on", attributes: { friendly_name: effect.toUpperCase() } }]));
+    const hass = { states, callService: async () => {}, language: "en" };
+    const controls = {
+      acknowledge: { enabled: false, label: "ACKNOWLEDGE" }, silence: { enabled: false, label: "SILENCE" },
+      reset: { enabled: false, label: "RESET" }, lamp_test: { enabled: false, label: "LAMP TEST" },
+      clear_acknowledged: { enabled: false, label: "CLEAR ACKNOWLEDGED" },
+    };
+    effects.forEach((effect, index) => {
+      const section = document.createElement("section");
+      section.className = "sample";
+      section.innerHTML = `<h2>${effect === "none" ? "STEADY + FLICKER" : effect.toUpperCase()}</h2><annunciator-grid-card id="card-${effect}"></annunciator-grid-card>`;
+      document.getElementById("cards").append(section);
+      const card = section.querySelector("annunciator-grid-card");
+      card.setConfig({
+        type: "custom:annunciator-grid-card", columns: 1, rows: 1, row_mode: "auto", panel_sizing: "auto_fit",
+        cell_width: 225, cell_height: 160, outer_frame: 6, mullion: 6, panel_theme: "classic",
+        default_lamp_style: "retro", default_lens_type: "plastic", flicker: true, retro_warmup: false,
+        header_controls: controls, header_tallies: {}, entities: [{
+          uid: `retro-${effect}`, ack_slot: index + 1, entity: `binary_sensor.${effect}`, shape: "round_rectangle",
+          eval_mode: "toggle", color_behavior: "custom", colors: { on: "#70b45b", off: "#eeeeee" },
+          primary_mode: "custom", primary_text: effect === "none" ? "RETRO STEADY" : `RETRO ${effect.toUpperCase()}`,
+          secondary_mode: "custom", secondary_text: "TRANSLUCENT", alert_style: effect,
+          translucent_illumination: true, lamp_style: "retro", lens_type: "plastic",
+        }],
+      });
+      card.hass = hass;
+    });
+    ["plastic", "glass", "frosted", "smoked"].forEach((material, index) => {
+      const entity = `binary_sensor.material_${material}`;
+      states[entity] = { state: "on", attributes: { friendly_name: material.toUpperCase() } };
+      const section = document.createElement("section");
+      section.className = "sample";
+      section.innerHTML = `<h2>${material.toUpperCase()}</h2><annunciator-grid-card id="material-${material}"></annunciator-grid-card>`;
+      document.getElementById("materials").append(section);
+      const card = section.querySelector("annunciator-grid-card");
+      card.setConfig({
+        type: "custom:annunciator-grid-card", columns: 1, rows: 1, row_mode: "auto", panel_sizing: "auto_fit",
+        cell_width: 225, cell_height: 160, outer_frame: 6, mullion: 6, panel_theme: "classic",
+        default_lamp_style: "retro", default_lens_type: material, flicker: true, retro_warmup: false,
+        header_controls: controls, header_tallies: {}, entities: [{
+          uid: `material-${material}`, ack_slot: 20 + index, entity, shape: "round_rectangle", eval_mode: "toggle",
+          color_behavior: "custom", colors: { on: "#d18b43", off: "#eeeeee" }, primary_mode: "custom",
+          primary_text: material.toUpperCase(), secondary_mode: "custom", secondary_text: "PULSE",
+          alert_style: "pulse", translucent_illumination: true, lamp_style: "retro", lens_type: material,
+        }],
+      });
+      card.hass = hass;
+    });
+    states["binary_sensor.pair_top"] = { state: "on", attributes: { friendly_name: "PAIR ALERT" } };
+    states["binary_sensor.pair_bottom"] = { state: "on", attributes: { friendly_name: "PAIR STEADY" } };
+    const pairSection = document.createElement("section");
+    pairSection.className = "sample";
+    pairSection.innerHTML = `<h2>TOP ALERT / BOTTOM STEADY</h2><annunciator-grid-card id="paired"></annunciator-grid-card>`;
+    document.getElementById("pairs").append(pairSection);
+    const pairCard = pairSection.querySelector("annunciator-grid-card");
+    pairCard.setConfig({
+      type: "custom:annunciator-grid-card", columns: 1, rows: 1, row_mode: "auto", panel_sizing: "auto_fit",
+      cell_width: 225, cell_height: 220, outer_frame: 6, mullion: 6, panel_theme: "classic",
+      default_lamp_style: "retro", default_lens_type: "glass", flicker: true, retro_warmup: false,
+      header_controls: controls, header_tallies: {}, entities: [
+        { uid: "pair-top", ack_slot: 30, entity: "binary_sensor.pair_top", pair_id: "retro-pair", pair_mode: "top", pair_orientation: "vertical", eval_mode: "toggle", color_behavior: "custom", colors: { on: "#68aee8" }, primary_mode: "custom", primary_text: "ALERT", secondary_mode: "none", alert_style: "pulse", translucent_illumination: true, lamp_style: "retro", lens_type: "glass" },
+        { uid: "pair-bottom", ack_slot: 31, entity: "binary_sensor.pair_bottom", pair_id: "retro-pair", pair_mode: "bottom", pair_orientation: "vertical", eval_mode: "toggle", color_behavior: "custom", colors: { on: "#68aee8" }, primary_mode: "custom", primary_text: "STEADY", secondary_mode: "none", alert_style: "none", translucent_illumination: true, lamp_style: "retro", lens_type: "glass" },
+      ],
+    });
+    pairCard.hass = hass;
+    setTimeout(() => {
+      const failures = [];
+      const animation = (node, pseudo = null) => getComputedStyle(node, pseudo).animationName;
+      const steady = document.getElementById("card-none").shadowRoot.querySelector(".cell");
+      if (!steady?.classList.contains("retro") || !steady?.classList.contains("translucent-illumination") || !steady?.classList.contains("on")) failures.push("steady-retro-classes");
+      if (!animation(steady?.querySelector(".window"), "::before").includes("incFlicker")) failures.push("steady-flicker-missing");
+      if (animation(steady?.querySelector(".window")) !== "none") failures.push("steady-window-alert-animation");
+      for (const effect of effects.filter((name) => name !== "none")) {
+        const cell = document.getElementById(`card-${effect}`).shadowRoot.querySelector(".cell");
+        const win = cell?.querySelector(".window");
+        if (!cell?.classList.contains(effect)) failures.push(`effect-class:${effect}`);
+        if (!animation(win).toLowerCase().includes(`retrotrans${effect}`)) failures.push(`effect-animation:${effect}:${animation(win)}`);
+        if (animation(win, "::before").includes("incFlicker")) failures.push(`competing-flicker:${effect}`);
+      }
+      for (const material of ["plastic", "glass", "frosted", "smoked"]) {
+        const cell = document.getElementById(`material-${material}`).shadowRoot.querySelector(".cell");
+        if (!cell?.classList.contains(`lens-${material}`) || !cell?.classList.contains("translucent-illumination")) failures.push(`material:${material}`);
+      }
+      const paired = pairCard.shadowRoot.querySelector(".cell.paired"), top = paired?.querySelector(".pairHalf.top"), bottom = paired?.querySelector(".pairHalf.bottom");
+      if (!paired || !top?.classList.contains("pulse") || bottom?.classList.contains("pulse")) failures.push("paired-alert-ownership");
+      if (!animation(top?.querySelector(".window")).toLowerCase().includes("retrotranspulse") || animation(top?.querySelector(".window"), "::before").includes("incFlicker")) failures.push("paired-alert-animation");
+      if (!animation(bottom?.querySelector(".window"), "::before").includes("incFlicker")) failures.push("paired-steady-flicker");
+      if (browserErrors.length) failures.push(`browser-errors:${browserErrors.length}`);
+      window.retroAlertValidation = { failures, errors: browserErrors };
+      const audit = document.getElementById("audit");
+      audit.textContent = failures.length ? `Browser audit failed: ${failures.join(" · ")}` : "Browser audit passed: steady retro flicker · exclusive alert animations · translucent materials · paired animation ownership · no browser errors";
+      audit.style.borderColor = failures.length ? "#a54d5b" : "#3d7c52";
+      audit.style.background = failures.length ? "#3c1d23" : "#173222";
+      audit.style.color = failures.length ? "#ffd0d5" : "#a8e6b8";
+      document.body.dataset.status = failures.length ? "fail" : "pass";
+      document.body.dataset.ready = "true";
+    }, 300);
+  </script>
+</body>
+</html>

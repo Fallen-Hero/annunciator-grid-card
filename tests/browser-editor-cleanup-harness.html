@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Annunciator visual editor cleanup validation</title>
+  <style>
+    :root { color-scheme: dark; --primary-color: #42a5f5; --primary-text-color: #f5f7fa; --secondary-text-color: #b7c0ce; --divider-color: #566070; --card-background-color: #262b33; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; background: #171a1f; color: var(--primary-text-color); font-family: system-ui, sans-serif; }
+    h1 { margin: 0 0 6px; font-size: 22px; }
+    .intro { margin: 0 0 16px; color: var(--secondary-text-color); }
+    .audit { margin: 0 0 16px; padding: 9px 11px; border: 1px solid #3d7c52; border-radius: 8px; background: #173222; color: #a8e6b8; font-weight: 700; }
+    .host { max-width: 860px; margin: 0 auto; padding: 16px; border: 1px solid #46505e; border-radius: 12px; background: #20252c; }
+    body.mobile .host { max-width: 430px; }
+    annunciator-grid-card-editor { display: block; width: 100%; }
+    ha-form select, ha-form input { width: 100%; min-height: 46px; border: 1px solid #5b6675; border-radius: 6px; padding: 0 10px; background: #2d333c; color: #f5f7fa; }
+    ha-switch input { width: 20px; height: 20px; accent-color: var(--primary-color); }
+    ha-selector .mockMedia { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; padding: 8px 11px; border: 1px solid #5b6675; border-radius: 7px; background: #2d333c; }
+    ha-selector .mockMedia span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ha-selector .mockMedia strong { flex: 0 0 auto; padding: 5px 8px; border: 1px solid #6e7b8d; border-radius: 6px; background: #39414c; }
+  </style>
+  <script>
+    window.browserErrors = [];
+    addEventListener("error", (event) => window.browserErrors.push(String(event.error?.stack || event.message)));
+    addEventListener("unhandledrejection", (event) => window.browserErrors.push(String(event.reason?.stack || event.reason)));
+
+    class MockHaSwitch extends HTMLElement {
+      set checked(value) { this._checked = !!value; this._render(); }
+      get checked() { return !!this._checked; }
+      connectedCallback() { this._render(); }
+      _render() { this.textContent = ""; const input = document.createElement("input"); input.type = "checkbox"; input.checked = this.checked; input.addEventListener("change", () => { this._checked = input.checked; this.dispatchEvent(new Event("change", { bubbles: true })); }); this.append(input); }
+    }
+    class MockHaForm extends HTMLElement {
+      set schema(value) { this._schema = value; this._render(); }
+      get schema() { return this._schema || []; }
+      set data(value) { this._data = value || {}; this._render(); }
+      get data() { return this._data || {}; }
+      connectedCallback() { this._render(); }
+      _render() {
+        this.textContent = "";
+        const entry = this.schema[0]; if (!entry) return;
+        if (entry.selector?.select) {
+          const select = document.createElement("select");
+          for (const option of entry.selector.select.options || []) { const el = document.createElement("option"); el.value = option.value; el.textContent = option.label; select.append(el); }
+          select.value = String(this.data[entry.name] ?? ""); this.append(select);
+        } else {
+          const input = document.createElement("input"); input.value = String(this.data[entry.name] || ""); input.placeholder = "Select entity"; this.append(input);
+        }
+      }
+    }
+    class MockHaSelector extends HTMLElement {
+      set value(value) { this._value = value || {}; this._render(); }
+      get value() { return this._value || {}; }
+      set label(value) { this._label = value; this._render(); }
+      get label() { return this._label || "Choose media"; }
+      connectedCallback() { this._render(); }
+      _render() {
+        this.textContent = "";
+        const button = document.createElement("button"); button.type = "button"; button.className = "mockMedia";
+        Object.assign(button.style, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", width: "100%", minHeight: "52px" });
+        const text = document.createElement("span"); text.textContent = this.value.metadata?.title || this.value.media_content_id || "No media selected";
+        const action = document.createElement("strong"); action.textContent = this.label;
+        Object.assign(text.style, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+        Object.assign(action.style, { flex: "0 0 auto", padding: "5px 8px", border: "1px solid #6e7b8d", borderRadius: "6px", background: "#39414c" });
+        button.append(text, action); this.append(button);
+      }
+    }
+    customElements.define("ha-switch", MockHaSwitch);
+    customElements.define("ha-form", MockHaForm);
+    customElements.define("ha-selector", MockHaSelector);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=panel-frames-empty-state-cp21"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <script>if (new URLSearchParams(location.search).get("mobile") === "1") document.body.classList.add("mobile");</script>
+  <main class="host">
+    <h1>Visual editor cleanup</h1>
+    <p class="intro">Portable presets, lamp-brightness profiles, compact appearance sections, true None surfaces, media selection, and sentence-case audit</p>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <annunciator-grid-card id="surfaceCard"></annunciator-grid-card>
+    <annunciator-grid-card-editor id="editor"></annunciator-grid-card-editor>
+  </main>
+  <script>
+    const hass = {
+      states: {
+        "binary_sensor.server": { state: "on", attributes: { friendly_name: "Server status" } },
+        "binary_sensor.standby": { state: "off", attributes: { friendly_name: "Standby system" } },
+        "media_player.hall": { state: "idle", attributes: { friendly_name: "Hall speaker" } },
+      },
+      callService: async () => {}, language: "en",
+    };
+    const config = {
+      type: "custom:annunciator-grid-card", config_version: 3, title: "ANNUNCIATOR ALARM PANEL", columns: 3,
+      inactive_lamp_default: "dim", inactive_lamp_brightness: 29,
+      appearance_presets: [{ id: "classic-night", name: "Classic night", values: { panel_theme: "classic", default_lamp_style: "modern", default_lens_type: "plastic", inactive_lamp_default: "dim", inactive_lamp_brightness: 29 } }],
+      lamp_appearance_presets: [{ id: "lamp-blue", name: "Operator blue", values: { shape: "round_rectangle", font_family: "monospace", icon_size: 44 } }],
+      alarm_output: {
+        mode: "media_player", media_player: "media_player.hall",
+        media_content_id: "media-source://media_source/local/FGD Alarm.mp3", media_content_type: "audio/mpeg",
+        media_metadata: { title: "FGD Alarm.mp3", media_class: "music" },
+      },
+      panel_appearance: { background_none: true, border_none: true, frame_none: true, lamp_frame_none: true, lamp_border_none: true },
+      header_appearance: { background_none: true, border_none: true, button_background_none: true, button_border_none: true },
+      spacer_appearance: { mode: "custom", fill_none: true, bezel_none: true, border_none: true },
+      header_tallies: { active: true, alarm: true, unacknowledged: true },
+      header_controls: { acknowledge: { enabled: true, label: "ACKNOWLEDGE" }, silence: { enabled: true, label: "SILENCE" }, reset: { enabled: false, label: "RESET" }, lamp_test: { enabled: false, label: "LAMP TEST" }, clear_acknowledged: { enabled: false, label: "CLEAR ACKNOWLEDGED" } },
+      entities: [{ uid: "server", ack_slot: 1, entity: "binary_sensor.server", name_override: "Server status", color_behavior: "standard", shape: "circle", participates_in_alarm_output: true, enable_auto_styles: true, auto_styles: [{ name: "Server active", enabled: true, kind: "state", state: "on", force_state: "on" }] },{ uid: "standby", ack_slot: 2, entity: "binary_sensor.standby", name_override: "Standby system", color_behavior: "standard", shape: "round_rectangle" },{ uid: "gap", ack_slot: 3, entity: "", spacer_appearance: { mode: "inherit" } }],
+    };
+    const surfaceCard = document.getElementById("surfaceCard"); surfaceCard.setConfig(config); surfaceCard.hass = hass;
+    const editor = document.getElementById("editor"); editor.hass = hass; editor.setConfig(config);
+    editor.shadowRoot.getElementById("panelSettings").open = true;
+    const failures = [];
+    let selectedEditorText=editor.shadowRoot.getElementById("editor").textContent;
+    if(editor._editorMode!=="basic"||editor._page!=="basic"||!selectedEditorText.includes("Quick setup")||!selectedEditorText.includes("Full editor"))failures.push("quick-editor-default");
+    if((selectedEditorText.match(/Color behavior/g)||[]).length!==1)failures.push("quick-editor-duplicate");
+    editor._bulkMode=true;editor._bulkSelection=new Set(["server"]);editor._renderList();const bulkText=editor.shadowRoot.getElementById("bulkPanel").textContent;if(!bulkText.includes("1 lamp selected")||!["Group","Shape","Lamp style","Lens","Color behavior","Icon size","Brightness","ACK rearm"].every(label=>bulkText.includes(label)))failures.push("bulk-editor-fields");editor._bulkMode=false;editor._renderList();
+    editor._page="rules";editor._renderEditor();const traceText=editor.shadowRoot.getElementById("editor").textContent;if(!traceText.includes("Live rule trace")||!traceText.includes("Winner:")||!traceText.includes("Server active"))failures.push("live-rule-trace");
+    const panelHeadings = { layout: "Panel layout", appearance: "Panel appearance", acknowledgement: "Acknowledgement and header", alarm_output: "Alarm output", groups: "Group settings", advanced: "Advanced panel settings" };
+    for (const [page, heading] of Object.entries(panelHeadings)) { editor._panelPage = page; editor._renderPanel(); if (!editor.shadowRoot.getElementById("panelBody").textContent.includes(heading)) failures.push(`panel:${page}`); }
+    for (const page of ["setup", "display", "behavior", "appearance", "interaction", "rules", "advanced"]) { editor._page = page; editor._renderEditor(); if (!editor.shadowRoot.getElementById("editor").textContent.trim()) failures.push(`lamp:${page}`); }
+    editor._panelPage = "appearance"; editor._renderPanel();
+    let appearanceDetails = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")];
+    if (appearanceDetails.length < 8) failures.push(`appearance-sections:${appearanceDetails.length}`);
+    if (!appearanceDetails.find((x) => x.textContent.includes("Quick appearance"))?.open) failures.push("quick-section-not-open");
+    if (!appearanceDetails.find((x) => x.textContent.includes("Appearance presets · 1 saved"))?.open) failures.push("preset-section-not-open");
+    if (appearanceDetails.find((x) => x.textContent.includes("Advanced colors"))?.open) failures.push("advanced-section-open");
+    let surfacesSection = appearanceDetails.find((x) => x.querySelector(".editorDisclosureTitle")?.textContent === "Panel & frames");
+    if (!surfacesSection?.textContent.includes("All panel and frame surfaces are disabled in Quick appearance.")) failures.push("surface-empty-state-missing");
+    const editVisibility = surfacesSection && [...surfacesSection.querySelectorAll("button")].find((x) => x.textContent === "Edit visibility");
+    if (!editVisibility) failures.push("surface-empty-state-route-missing");
+    if (surfacesSection && editVisibility) { surfacesSection.open = true; surfacesSection.dispatchEvent(new Event("toggle")); editVisibility.click(); appearanceDetails = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")]; if (!appearanceDetails.find((x) => x.querySelector(".editorDisclosureTitle")?.textContent === "Quick appearance")?.open) failures.push("surface-route-quick-closed"); if (appearanceDetails.find((x) => x.querySelector(".editorDisclosureTitle")?.textContent === "Panel & frames")?.open) failures.push("surface-route-panel-open"); }
+    const appearanceText = editor.shadowRoot.getElementById("panelBody").textContent;
+    for (const label of ["Appearance presets","Saved preset","Preset name","Save as new","Apply","Update","Delete","Lamp lighting","Brightness profile","Dim level","OFF · ON · ALERT preview","No panel background","No panel border","No panel frame","No lamp bezels","No lens borders","No header background","No header border","No button backgrounds","No button borders","No spacer fill","No spacer frame / bezel","No spacer border"]) if (!appearanceText.includes(label)) failures.push(`missing:${label}`);
+    const appearanceBehavior = JSON.stringify({ entities: editor._config.entities, alarm_output: editor._config.alarm_output, columns: editor._config.columns });
+    let presetSection = appearanceDetails.find((x) => x.textContent.includes("Appearance presets")), presetName = presetSection?.querySelector('input.nativeInput');
+    if (presetName) { presetName.value = "Browser look"; presetName.dispatchEvent(new Event("input", { bubbles: true })); presetName.dispatchEvent(new Event("change", { bubbles: true })); }
+    presetSection && [...presetSection.querySelectorAll("button")].find((x) => x.textContent === "Save as new")?.click(); if (editor._config.appearance_presets?.length !== 2) failures.push("preset-save-ui");
+    presetSection = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")].find((x) => x.textContent.includes("Appearance presets")); presetSection && [...presetSection.querySelectorAll("button")].find((x) => x.textContent === "Delete")?.click(); if (editor._config.appearance_presets?.length !== 1) failures.push("preset-delete-ui");
+    editor._config = { ...editor._config, panel_theme: "neon" }; editor._renderPanel(); presetSection = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")].find((x) => x.textContent.includes("Appearance presets")); presetSection && [...presetSection.querySelectorAll("button")].find((x) => x.textContent === "Apply")?.click(); if (editor._config.panel_theme !== "classic") failures.push("preset-apply-ui");
+    if (JSON.stringify({ entities: editor._config.entities, alarm_output: editor._config.alarm_output, columns: editor._config.columns }) !== appearanceBehavior) failures.push("preset-behavior-leak");
+    let lightingSection = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")].find((x) => x.querySelector(".editorDisclosureTitle")?.textContent === "Lamp lighting"); let brightnessForm = [...(lightingSection?.querySelectorAll("ha-form")||[])].find((form) => form.parentElement?.querySelector(".label")?.textContent === "Brightness profile"); brightnessForm?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { v: "normal" } } })); if (editor._config.lamp_brightness?.profile !== "normal") failures.push("brightness-normal-ui");
+    lightingSection = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")].find((x) => x.querySelector(".editorDisclosureTitle")?.textContent === "Lamp lighting"); brightnessForm = [...(lightingSection?.querySelectorAll("ha-form")||[])].find((form) => form.parentElement?.querySelector(".label")?.textContent === "Brightness profile"); brightnessForm?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { v: "dim_off" } } })); if (editor._config.lamp_brightness?.profile !== "dim_off") failures.push("brightness-dim-off-ui");
+    lightingSection = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")].find((x) => x.querySelector(".editorDisclosureTitle")?.textContent === "Lamp lighting"); const brightnessInput = [...(lightingSection?.querySelectorAll('input[type="number"]')||[])].find((input) => input.parentElement?.querySelector(".label")?.textContent === "Dim level"); if (brightnessInput) { brightnessInput.value = "43"; brightnessInput.dispatchEvent(new Event("input", { bubbles: true })); brightnessInput.dispatchEvent(new Event("change", { bubbles: true })); } if (editor._config.lamp_brightness?.dim_level !== 43 || editor._config.lamp_brightness?.off !== 43) failures.push("brightness-level-ui"); appearanceDetails = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")];
+    const advanced = appearanceDetails.find((x) => x.textContent.includes("Advanced colors")); if (advanced) { advanced.open = true; advanced.dispatchEvent(new Event("toggle")); editor._renderPanel(); appearanceDetails = [...editor.shadowRoot.querySelectorAll("#panelBody details.editorDisclosure")]; if (!appearanceDetails.find((x) => x.textContent.includes("Advanced colors"))?.open) failures.push("section-state-not-remembered"); }
+    editor._page = "appearance"; editor._renderEditor(); if (editor.shadowRoot.querySelectorAll("#editor details.editorDisclosure").length < 3) failures.push("lamp-appearance-sections");
+    editor._page = "setup"; editor._renderEditor(); editor._panelPage = "alarm_output"; editor._renderPanel();
+    let panel = editor.shadowRoot.getElementById("panelBody"); let picker = panel.querySelector("ha-selector");
+    if (!picker || picker.selector?.media?.clearable !== true || picker.context?.filter_entity !== "media_player.hall") failures.push("media-selector-contract");
+    if (picker?.value?.metadata?.title !== "FGD Alarm.mp3") failures.push("media-selector-value");
+    if (!panel.querySelector("details.editorDisclosure") || !panel.textContent.includes("Media content ID or URL")) failures.push("manual-fallback");
+    picker?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { entity_id: "media_player.hall", media_content_id: "media-source://media_source/local/Browser Audit.mp3", media_content_type: "audio/mpeg", metadata: { title: "Browser Audit.mp3" } } } }));
+    if (editor._config.alarm_output.media_metadata?.title !== "Browser Audit.mp3") failures.push("media-selector-mutation");
+    const prohibited = ["Paired Lamp", "Lamp Navigator", "Alarm Output", "Media Player", "Advanced Action", "Round Rectangle", "Indicator Dot", "ACK Alerts button", "Allow More Info"];
+    const prohibitedLabels = prohibited.filter((label) => editor.shadowRoot.textContent.includes(label)); if (prohibitedLabels.length) failures.push(`capitalization:${prohibitedLabels.join(",")}`);
+    panel = editor.shadowRoot.getElementById("panelBody"); picker = panel.querySelector("ha-selector");
+    if (new URLSearchParams(location.search).get("appearance") === "1") { editor._page = "appearance"; editor._renderEditor(); editor._panelPage = "appearance"; editor._renderPanel(); }
+    window.editorValidation = { failures, panelPages: Object.keys(panelHeadings).length, lampPages: 7, appearanceSections: appearanceDetails.length, picker: !!picker, errors: window.browserErrors };
+    setTimeout(() => {
+      const panelNode=surfaceCard.shadowRoot?.getElementById("panelScale"),headerNode=surfaceCard.shadowRoot?.getElementById("header"),spacerNode=surfaceCard.shadowRoot?.querySelector(".cell.spacer"),gridNode=surfaceCard.shadowRoot?.getElementById("grid"),activeNode=surfaceCard.shadowRoot?.querySelector('.cell[data-original-index="0"]'),dimNode=surfaceCard.shadowRoot?.querySelector('.cell[data-original-index="1"]');
+      for(const cls of ["surface-background-none","surface-border-none","surface-frame-none","surface-lamp-frame-none","surface-lamp-border-none"])if(!panelNode?.classList.contains(cls))failures.push(`runtime:${cls}`);
+      if(headerNode?.style.getPropertyValue("--annun-header-background")!=="transparent"||headerNode?.style.getPropertyValue("--annun-header-button-border-width")!=="0px")failures.push("runtime:header-none");
+      for(const cls of ["spacer-fill-none","spacer-bezel-none","spacer-border-none"])if(!spacerNode?.classList.contains(cls))failures.push(`runtime:${cls}`);
+      if(!gridNode?.classList.contains("inactiveDimming")||gridNode?.style.getPropertyValue("--annun-inactive-opacity")!=="0.29")failures.push("runtime:dim-scope");
+      if(activeNode?.classList.contains("inactive-dim")||!dimNode?.classList.contains("inactive-dim"))failures.push("runtime:dim-state");
+      const dimWindow=dimNode?.querySelector(".window");dimWindow?.getAnimations().forEach(animation=>animation.finish());const dimOpacity=dimWindow?Number(getComputedStyle(dimWindow).opacity):NaN;if(!Number.isFinite(dimOpacity)||Math.abs(dimOpacity-.29)>.01)failures.push(`runtime:dim-opacity:${dimOpacity}`);
+      if (window.browserErrors.length) failures.push(`browser-errors:${window.browserErrors.length}`);
+      const editorShell=editor.shadowRoot?.querySelector(".shell");if(editorShell&&editorShell.scrollWidth>editorShell.clientWidth+2)failures.push(`editor-horizontal-overflow:${editorShell.scrollWidth}/${editorShell.clientWidth}`);
+      const audit = document.getElementById("audit"); audit.textContent = failures.length ? `Browser audit failed: ${failures.join(" · ")}` : "Browser audit passed: portable presets · brightness profiles · compact appearance sections · remembered state · panel/header/lamp/spacer None layers · media picker · sentence case · no browser errors";
+      audit.style.borderColor = failures.length ? "#9b3f49" : "#3d7c52"; audit.style.background = failures.length ? "#3b1c21" : "#173222";
+      document.body.dataset.status = failures.length ? "fail" : "pass";
+      document.body.dataset.ready = "true";
+    }, 250);
+  </script>
+</body>
+</html>

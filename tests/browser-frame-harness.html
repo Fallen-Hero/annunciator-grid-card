@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Annunciator frame separation validation</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; background: #202329; color: #f5f7fa; font-family: system-ui, sans-serif; }
+    h1 { margin: 0 0 16px; font-size: 22px; }
+    .audit { margin: 0 0 16px; padding: 9px 11px; border: 1px solid #8b6a28; border-radius: 8px; background: #382c15; color: #ffe2a0; font-weight: 700; }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
+    .sample { min-width: 0; padding: 12px; border: 1px solid #4b5260; background: #292d35; border-radius: 8px; }
+    .sample h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: .03em; }
+    annunciator-grid-card { display: block; width: 100%; }
+    .editorHost { margin-top: 20px; padding: 12px; border: 1px solid #4b5260; background: #292d35; border-radius: 8px; }
+    annunciator-grid-card-editor { display: block; max-width: 1100px; }
+    @media (max-width: 900px) { .cards { grid-template-columns: 1fr; } }
+  </style>
+  <script>
+    window.browserErrors = [];
+    addEventListener("error", (event) => browserErrors.push(String(event.error?.stack || event.message)));
+    addEventListener("unhandledrejection", (event) => browserErrors.push(String(event.reason?.stack || event.reason)));
+  </script>
+  <script src="../dist/annunciator-grid-card.js"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <h1>Outer frame / lamp frame separation</h1>
+  <p id="audit" class="audit">Running browser audit…</p>
+  <div class="cards">
+    <section class="sample"><h2>Compatibility: lamp follows outer frame</h2><annunciator-grid-card id="follow"></annunciator-grid-card></section>
+    <section class="sample"><h2>Independent: theme lamp bezel</h2><annunciator-grid-card id="theme"></annunciator-grid-card></section>
+    <section class="sample"><h2>Independent: custom lamp bezel</h2><annunciator-grid-card id="custom"></annunciator-grid-card></section>
+    <section class="sample"><h2>Legacy global Frame fallback</h2><annunciator-grid-card id="fallback"></annunciator-grid-card></section>
+  </div>
+  <section class="editorHost"><h2>Visual editor — Panel Appearance</h2><annunciator-grid-card-editor id="editor"></annunciator-grid-card-editor></section>
+  <script>
+    const states = {
+      "light.rectangle": { state: "on", attributes: { friendly_name: "Rectangle" } },
+      "light.circle": { state: "on", attributes: { friendly_name: "Circle" } },
+    };
+    const hass = { states, callService: async () => {}, language: "en" };
+    const controls = {
+      acknowledge: { enabled: false, label: "ACKNOWLEDGE" }, silence: { enabled: false, label: "SILENCE" },
+      reset: { enabled: false, label: "RESET" }, lamp_test: { enabled: false, label: "LAMP TEST" },
+      clear_acknowledged: { enabled: false, label: "CLEAR ACKNOWLEDGED" },
+    };
+    const entities = [
+      { uid: "rectangle", ack_slot: 1, entity: "light.rectangle", shape: "rectangle", eval_mode: "toggle", primary_mode: "custom", primary_text: "RECTANGLE", secondary_mode: "state", alert_style: "none" },
+      { uid: "circle", ack_slot: 2, entity: "light.circle", shape: "circle", eval_mode: "toggle", primary_mode: "custom", primary_text: "CIRCLE", secondary_mode: "state", alert_style: "none" },
+    ];
+    const outerFrame = "#14566b";
+    const customLampFrame = "#7b2f5b";
+    const config = (title, panelAppearance) => ({
+      type: "custom:annunciator-grid-card", title, columns: 2, rows: 1, row_mode: "auto", panel_sizing: "auto_fit",
+      cell_width: 190, cell_height: 120, outer_frame: 10, mullion: 7, panel_theme: "classic",
+      header_controls: controls, header_tallies: {}, panel_appearance: panelAppearance, entities,
+    });
+    const configs = {
+      follow: config("FOLLOW OUTER", { frame_enabled: true, frame: outerFrame }),
+      theme: config("THEME BEZEL", { frame_enabled: true, frame: outerFrame, lamp_frame_mode: "theme" }),
+      custom: config("CUSTOM BEZEL", { frame_enabled: true, frame: outerFrame, lamp_frame_mode: "custom", lamp_frame: customLampFrame }),
+      fallback: { ...config("FRAME FALLBACK", {}), severity_colors: { enabled: true, frame_enabled: true, frame: "#2468ac" } },
+    };
+    for (const [id, cfg] of Object.entries(configs)) {
+      const card = document.getElementById(id);
+      card.setConfig(cfg);
+      card.hass = hass;
+    }
+    const editor = document.getElementById("editor");
+    editor.hass = hass;
+    editor.setConfig(configs.custom);
+    editor._panelPage = "appearance";
+    editor._renderPanel();
+    setTimeout(() => {
+      const failures = [];
+      const color = (id, selector) => getComputedStyle(document.getElementById(id).shadowRoot.querySelector(selector)).backgroundColor;
+      const expectedOuter = "rgb(20, 86, 107)";
+      if (color("follow", "#grid") !== expectedOuter || color("follow", ".cell") !== expectedOuter) failures.push("follow-panel-frame");
+      if (color("theme", "#grid") !== expectedOuter || color("theme", ".cell") === expectedOuter) failures.push("theme-lamp-frame");
+      if (color("custom", "#grid") !== expectedOuter || color("custom", ".cell") !== "rgb(123, 47, 91)") failures.push("custom-lamp-frame");
+      if (color("fallback", "#grid") !== "rgb(36, 104, 172)" || color("fallback", ".cell") !== "rgb(36, 104, 172)") failures.push("legacy-frame-fallback");
+      for (const id of Object.keys(configs)) if (document.getElementById(id).shadowRoot.querySelectorAll("#grid > .cell").length !== 2) failures.push(`render:${id}`);
+      const panelText = editor.shadowRoot.getElementById("panelBody")?.textContent || "";
+      for (const label of ["Panel & frames", "Lamp frame source", "Lamp frame / bezel"]) if (!panelText.includes(label)) failures.push(`editor:${label}`);
+      if (browserErrors.length) failures.push(`browser-errors:${browserErrors.length}`);
+      if (new URLSearchParams(location.search).get("mobile") === "1" && document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) failures.push("mobile-page-overflow");
+      window.frameValidation = { failures, errors: browserErrors };
+      const audit = document.getElementById("audit");
+      audit.textContent = failures.length ? `Browser audit failed: ${failures.join(" · ")}` : "Browser audit passed: panel and lamp frame separation · legacy fallback · visual editor controls · no browser errors";
+      audit.style.borderColor = failures.length ? "#a54d5b" : "#3d7c52";
+      audit.style.background = failures.length ? "#3c1d23" : "#173222";
+      audit.style.color = failures.length ? "#ffd0d5" : "#a8e6b8";
+      document.body.dataset.status = failures.length ? "fail" : "pass";
+      document.body.dataset.ready = "true";
+    }, 200);
+  </script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Final layout and interaction audit</title>
+  <style>
+    :root{color-scheme:dark;--primary-color:#42a5f5;--primary-text-color:#f5f7fa;--secondary-text-color:#b7c0ce;--divider-color:#566070;--card-background-color:#262b33}
+    *{box-sizing:border-box}body{margin:0;padding:18px;background:#15181d;color:var(--primary-text-color);font-family:system-ui,sans-serif}.host{max-width:1080px;margin:auto}.mobile .host{max-width:430px}.audit{padding:9px 11px;border:1px solid #8b6a28;border-radius:8px;background:#382c15;color:#ffe2a0;font-weight:700}.stage{margin-top:14px;padding:10px;border:1px solid #46505e;border-radius:10px;background:#20252c;overflow:hidden}annunciator-grid-card{display:block;width:100%;min-width:0}
+  </style>
+  <script>
+    window.browserErrors=[];addEventListener("error",event=>browserErrors.push(String(event.error?.stack||event.message)));addEventListener("unhandledrejection",event=>browserErrors.push(String(event.reason?.stack||event.reason)));
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=final-audit"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <script>if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile")</script>
+  <main class="host">
+    <h1>Final layout and interaction audit</h1>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <section class="stage"><annunciator-grid-card id="spanCard"></annunciator-grid-card></section>
+    <section class="stage"><annunciator-grid-card id="collisionCard"></annunciator-grid-card></section>
+    <section class="stage"><annunciator-grid-card id="groupCard"></annunciator-grid-card></section>
+    <section class="stage"><annunciator-grid-card id="actionCard"></annunciator-grid-card></section>
+  </main>
+  <script>
+    const states={"binary_sensor.a":{state:"on",attributes:{friendly_name:"A"}},"binary_sensor.b":{state:"off",attributes:{friendly_name:"B"}},"binary_sensor.c":{state:"on",attributes:{friendly_name:"C"}}};
+    const serviceCalls=[];const hass={states,callService:async(...args)=>serviceCalls.push(args),language:"en"};
+    const common={type:"custom:annunciator-grid-card",config_version:3,show_ack_all:false,show_clear_ack:false,header_controls:{acknowledge:{enabled:false},silence:{enabled:false},reset:{enabled:false},lamp_test:{enabled:false},clear_acknowledged:{enabled:false}},header_tallies:{},cell_width:100,cell_height:80,cell_gap:8,outer_frame:0,severity_colors:{}};
+    const configs={
+      spanCard:{...common,panel_id:"browser-span",columns:7,panel_sizing:"auto_fit",entities:[{uid:"span",ack_slot:1,entity:"binary_sensor.a",column_span:3,row_span:2}]},
+      collisionCard:{...common,panel_id:"browser-collision",columns:4,panel_sizing:"fixed",entities:[{uid:"a",ack_slot:1,entity:"binary_sensor.a",column_span:2,row_span:2},{uid:"b",ack_slot:2,entity:"binary_sensor.b",column_span:2},{uid:"c",ack_slot:3,entity:"binary_sensor.c",column_span:3}]},
+      groupCard:{...common,panel_id:"browser-groups",columns:2,panel_sizing:"fixed",show_group_headers:true,entities:[{uid:"ga",ack_slot:1,entity:"binary_sensor.a",group:"First"},{uid:"gb",ack_slot:2,entity:"binary_sensor.b",group:"First"},{uid:"gc",ack_slot:3,entity:"binary_sensor.c",group:"Second"}]},
+      actionCard:{...common,panel_id:"browser-actions",columns:2,panel_sizing:"fixed",entities:[{uid:"action",ack_slot:1,source_mode:"derived",tap_action:"perform_action",tap_service:"homeassistant.turn_on",tap_service_data:{transition:1},tap_service_target:{entity_id:"light.audit"},double_tap_action:"none",hold_action:"none"},{uid:"unsafe",ack_slot:2,source_mode:"derived",tap_action:"url",tap_url:"javascript:alert(1)",double_tap_action:"none",hold_action:"none"}]}
+    };
+    for(const [id,config] of Object.entries(configs)){const card=document.getElementById(id);card.setConfig(config);card.hass=hass}
+    const failures=[];const fail=name=>failures.push(name);
+    setTimeout(async()=>{
+      for(const id of Object.keys(configs)){const card=document.getElementById(id);await card._runtimeRenderQueue;await card._renderDynamic()}
+      const span=document.getElementById("spanCard"),spanGrid=span.shadowRoot.querySelector("#grid"),spanCell=spanGrid.querySelector(".cell"),spanRect=spanCell.getBoundingClientRect(),spanGridRect=spanGrid.getBoundingClientRect();
+      if(spanGrid.dataset.renderColumns!=="3"||spanCell.dataset.columnSpan!=="3"||spanCell.dataset.rowSpan!=="2")fail("span-metadata");
+      if(Math.abs(spanRect.width-spanGridRect.width)>2||spanRect.height<160)fail(`span-geometry:${spanRect.width}/${spanGridRect.width}/${spanRect.height}`);
+      const collision=document.getElementById("collisionCard"),collisionCells=[...collision.shadowRoot.querySelectorAll("#grid>.cell")];
+      const placement=collisionCells.map(cell=>[cell.dataset.gridRow,cell.dataset.gridColumn,cell.dataset.rowSpan,cell.dataset.columnSpan]);
+      if(JSON.stringify(placement)!==JSON.stringify([["1","1","2","2"],["1","3","1","2"],["3","1","1","3"]]))fail(`collision-placement:${JSON.stringify(placement)}`);
+      for(let i=0;i<collisionCells.length;i++)for(let j=i+1;j<collisionCells.length;j++){const a=collisionCells[i].getBoundingClientRect(),b=collisionCells[j].getBoundingClientRect();if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)fail(`collision-overlap:${i}/${j}`)}
+      const group=document.getElementById("groupCard"),headers=[...group.shadowRoot.querySelectorAll(".groupHeader")],headerHeights=headers.map(header=>Math.round(header.getBoundingClientRect().height));
+      if(headers.length!==2)fail(`group-count:${headers.length}`);if(headerHeights.some(height=>height>56))fail(`group-height:${headerHeights.join("/")}`);
+      const action=document.getElementById("actionCard"),actionCells=[...action.shadowRoot.querySelectorAll("#grid>.cell")];
+      if(!actionCells[0].classList.contains("clickable")||!actionCells[0].getAttribute("aria-label")?.includes("Perform action"))fail("action-affordance");
+      if(actionCells[1].classList.contains("clickable"))fail("unsafe-url-affordance");
+      actionCells[0].dispatchEvent(new MouseEvent("click",{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,340));
+      if(JSON.stringify(serviceCalls)!==JSON.stringify([["homeassistant","turn_on",{transition:1},{entity_id:"light.audit"}]]))fail(`action-call:${JSON.stringify(serviceCalls)}`);
+      const shellOverflow=[...document.querySelectorAll(".stage")].some(stage=>stage.scrollWidth>stage.clientWidth+1);if(shellOverflow)fail("host-overflow");if(browserErrors.length)fail(`browser-errors:${browserErrors.length}`);
+      window.finalAuditValidation={failures,errors:browserErrors,span:{cell:[spanRect.width,spanRect.height],grid:[spanGridRect.width,spanGridRect.height]},placement,headerHeights,serviceCalls};
+      const audit=document.getElementById("audit");audit.textContent=failures.length?`Browser audit failed: ${failures.join(" · ")}`:"Browser audit passed: spans · collision packing · compact group headers · safe advanced actions · responsive overflow · no browser errors";document.body.dataset.status=failures.length?"fail":"pass";document.body.dataset.ready="true";
+    },300);
+  </script>
+</body>
+</html>

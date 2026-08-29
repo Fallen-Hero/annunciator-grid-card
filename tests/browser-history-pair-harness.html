@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Annunciator historical tally and paired-lamp validation</title>
+  <style>
+    :root{color-scheme:dark;--primary-color:#42a5f5;--primary-text-color:#f5f7fa;--secondary-text-color:#b7c0ce;--divider-color:#566070;--card-background-color:#262b33}
+    *{box-sizing:border-box}body{margin:0;padding:20px;background:#171a1f;color:var(--primary-text-color);font-family:system-ui,sans-serif}.host{max-width:920px;margin:0 auto;padding:16px;border:1px solid #46505e;border-radius:12px;background:#20252c}.mobile .host{max-width:430px}h1{margin:0 0 6px;font-size:22px}.intro{margin:0 0 14px;color:var(--secondary-text-color)}.audit{padding:9px 11px;border:1px solid #3d7c52;border-radius:8px;background:#173222;color:#a8e6b8;font-weight:700}.cards{display:grid;grid-template-columns:1fr;gap:16px;margin:16px 0}annunciator-grid-card-editor{display:block;width:100%}ha-form select,ha-form input{width:100%;min-height:46px;border:1px solid #5b6675;border-radius:6px;padding:0 10px;background:#2d333c;color:#f5f7fa}ha-switch input{width:20px;height:20px}ha-icon{display:inline-flex;align-items:center;justify-content:center}
+  </style>
+  <script>
+    window.browserErrors=[];addEventListener("error",e=>browserErrors.push(String(e.error?.stack||e.message)));addEventListener("unhandledrejection",e=>browserErrors.push(String(e.reason?.stack||e.reason)));window.confirm=()=>true;
+    class MockHaSwitch extends HTMLElement{set checked(v){this._checked=!!v;this._render()}get checked(){return!!this._checked}connectedCallback(){this._render()}_render(){this.textContent="";const i=document.createElement("input");i.type="checkbox";i.checked=this.checked;i.addEventListener("change",()=>{this._checked=i.checked;this.dispatchEvent(new Event("change",{bubbles:true}))});this.append(i)}}
+    class MockHaForm extends HTMLElement{set schema(v){this._schema=v;this._render()}get schema(){return this._schema||[]}set data(v){this._data=v||{};this._render()}get data(){return this._data||{}}connectedCallback(){this._render()}_emit(value){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:{v:value}},bubbles:true}))}_render(){this.textContent="";const e=this.schema[0];if(!e)return;if(e.selector?.select){const s=document.createElement("select");for(const o of e.selector.select.options||[]){const n=document.createElement("option");n.value=o.value;n.textContent=o.label;s.append(n)}s.value=String(this.data[e.name]??"");s.addEventListener("change",()=>this._emit(s.value));this.append(s)}else{const i=document.createElement("input");i.value=String(this.data[e.name]||"");i.placeholder="Select entity";i.addEventListener("change",()=>this._emit(i.value));this.append(i)}}}
+    class MockHaIcon extends HTMLElement{}
+    customElements.define("ha-switch",MockHaSwitch);customElements.define("ha-form",MockHaForm);customElements.define("ha-icon",MockHaIcon);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=history-pair-cp23"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <script>if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile")</script>
+  <main class="host">
+    <h1>Historical tallies and paired-lamp creation</h1>
+    <p class="intro">Rolling alarm-arrival totals plus unfinished-lamp identity and two-step pair setup.</p>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <div class="cards"><annunciator-grid-card id="historyCard"></annunciator-grid-card><annunciator-grid-card id="draftCard"></annunciator-grid-card></div>
+    <annunciator-grid-card-editor id="pairEditor"></annunciator-grid-card-editor>
+    <annunciator-grid-card-editor id="historyEditor"></annunciator-grid-card-editor>
+  </main>
+  <script>
+    (async()=>{
+      const run=new URLSearchParams(location.search).get("run")||"default",panelId=`browser-history-${run}`,historyKey=`annun_alarm_history::${panelId}`;localStorage.removeItem(historyKey);
+      const states={"binary_sensor.a":{state:"on",attributes:{friendly_name:"Alarm A"}},"binary_sensor.b":{state:"off",attributes:{friendly_name:"Alarm B"}}};
+      const hass={states,callService:async()=>{},language:"en"},hassFor=(state)=>({...hass,states:{...states,"binary_sensor.history":{state,attributes:{friendly_name:"Historical alarm"}}}});
+      const pairEditor=document.getElementById("pairEditor");pairEditor.hass=hass;pairEditor.setConfig({type:"custom:annunciator-grid-card",config_version:3,panel_id:`pair-${run}`,entities:[]});pairEditor.shadowRoot.getElementById("addPair").click();
+      const draftConfig=JSON.parse(JSON.stringify(pairEditor._config)),draftCard=document.getElementById("draftCard");draftCard.setConfig(draftConfig);draftCard._hass=hass;await draftCard._renderDynamic();
+      const firstForm=[...pairEditor.shadowRoot.querySelectorAll("#editor ha-form")].find(form=>form.schema?.[0]?.selector?.entity);firstForm?._emit("binary_sensor.a");pairEditor.shadowRoot.querySelectorAll(".pairNavHalf")[1]?.click();const secondForm=[...pairEditor.shadowRoot.querySelectorAll("#editor ha-form")].find(form=>form.schema?.[0]?.selector?.entity);secondForm?._emit("binary_sensor.b");
+      const historyConfig={type:"custom:annunciator-grid-card",config_version:3,panel_id:panelId,title:"ALARM TOTALS",header_tallies:{alarms_day:true,alarms_week:true,alarms_month:true,alarms_year:true},show_ack_all:false,show_clear_ack:false,header_controls:{acknowledge:{enabled:false},silence:{enabled:false},reset:{enabled:false},lamp_test:{enabled:false},clear_acknowledged:{enabled:false}},columns:1,cell_width:260,cell_height:110,entities:[{uid:"history-lamp",ack_slot:1,entity:"binary_sensor.history",lamp_type:"alarm",color_behavior:"severity",severity:"alarm",alert_style:"none"}]};
+      const historyCard=document.getElementById("historyCard");historyCard.setConfig(historyConfig);historyCard._hass=hassFor("off");await historyCard._renderDynamic();historyCard._hass=hassFor("on");await historyCard._renderDynamic();await historyCard._renderDynamic();historyCard._hass=hassFor("off");await historyCard._renderDynamic();historyCard._hass=hassFor("on");await historyCard._renderDynamic();
+      const beforeReset=JSON.parse(localStorage.getItem(historyKey)||"{}"),historyEditor=document.getElementById("historyEditor");historyEditor.hass=hass;historyEditor.setConfig(historyConfig);historyEditor.shadowRoot.getElementById("panelSettings").open=true;historyEditor._panelPage="acknowledgement";historyEditor._renderPanel();const clearButton=[...historyEditor.shadowRoot.querySelectorAll("#panelBody button")].find(button=>button.textContent==="Clear saved alarm totals");clearButton?.click();await historyCard._renderDynamic();const afterReset=JSON.parse(localStorage.getItem(historyKey)||"{}");
+      const failures=[],pairItems=pairEditor._config.entities,draftItems=draftConfig.entities,draftCell=draftCard.shadowRoot.querySelector("#grid>.cell"),historyText=historyCard.shadowRoot.getElementById("headerTallies")?.textContent||"";
+      if(draftItems.length!==2||!draftItems.every(item=>item.cell_type==="lamp"))failures.push("draft-lamp-identity");
+      if(!draftItems[0]?.pair_id||draftItems[0]?.pair_id!==draftItems[1]?.pair_id||draftItems[0]?.pair_mode!=="top"||draftItems[1]?.pair_mode!=="bottom")failures.push("automatic-pair-metadata");
+      if(!draftCell?.classList.contains("paired")||draftCell?.classList.contains("spacer")||draftCard.shadowRoot.querySelectorAll("#grid>.cell").length!==1)failures.push("draft-pair-rendering");
+      if(pairItems[0]?.entity!=="binary_sensor.a"||pairItems[1]?.entity!=="binary_sensor.b"||pairItems[0]?.pair_id!==pairItems[1]?.pair_id)failures.push("two-step-entity-selection");
+      if(pairEditor.shadowRoot.getElementById("configWarnings")?.textContent.includes("spacer"))failures.push("spacer-warning");
+      if(beforeReset.events?.length!==2||beforeReset.activeIds?.[0]!=="history-lamp")failures.push("arrival-transition-counting");
+      if(afterReset.events?.length!==0||afterReset.activeIds?.[0]!=="history-lamp")failures.push("safe-history-reset");
+      for(const label of ["ALARM DAY 0","ALARM WEEK 0","ALARM MONTH 0","ALARM YEAR 0"])if(!historyText.includes(label))failures.push(`header:${label}`);
+      const editorText=historyEditor.shadowRoot.getElementById("panelBody")?.textContent||"";for(const label of ["Historical alarm tallies","ALARM DAY","ALARM WEEK","ALARM MONTH","ALARM YEAR","Reset alarm history"])if(!editorText.includes(label))failures.push(`editor:${label}`);
+      const widths=[pairEditor,historyEditor].map(editor=>{const shell=editor.shadowRoot.querySelector(".shell"),panel=editor.shadowRoot.getElementById("panelBody");return {shell:[shell.clientWidth,shell.scrollWidth],panel:[panel.clientWidth,panel.scrollWidth]}});if(widths.some(entry=>entry.shell[0]!==entry.shell[1]||entry.panel[0]!==entry.panel[1]))failures.push("editor-overflow");
+      if(browserErrors.length)failures.push(`browser-errors:${browserErrors.length}`);
+      window.historyPairValidation={failures,beforeReset,afterReset,pairItems,widths,errors:browserErrors};const audit=document.getElementById("audit");audit.textContent=failures.length?`Browser audit failed: ${failures.join(" · ")}`:"Browser audit passed: paired drafts are lamps · automatic pair identity/adjacency · two-step entity selection · arrival/reload suppression · safe historical reset · all four tallies · no overflow · no browser errors";audit.style.borderColor=failures.length?"#9b3f49":"#3d7c52";audit.style.background=failures.length?"#3b1c21":"#173222";document.body.dataset.status=failures.length?"fail":"pass";document.body.dataset.ready="true";
+    })();
+  </script>
+</body>
+</html>

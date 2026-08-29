@@ -1,0 +1,32 @@
+# Script-based audible output with a separate stop script.
+# Replace all entity IDs. The browser displaying this card must remain open,
+# connected, and authorized to run both scripts.
+type: custom:annunciator-grid-card
+title: Script Alarm Output
+panel_id: script_alarm_output
+header_controls:
+  acknowledge:
+    enabled: true
+    label: ACKNOWLEDGE
+  silence:
+    enabled: true
+    label: SILENCE
+  clear_acknowledged:
+    enabled: true
+    label: CLEAR ACKNOWLEDGED
+alarm_output:
+  mode: script
+  script: script.start_annunciator_horn
+  silence_script: script.stop_annunciator_horn
+entities:
+  - entity: binary_sensor.boiler_trip
+    lamp_type: alarm
+    color_behavior: severity
+    severity: trip
+    eval_mode: toggle
+    alert_style: blink
+    alert_when: on
+    ack_rearm: inherit
+    participates_in_alarm_output: true
+    primary_mode: name
+    secondary_mode: state

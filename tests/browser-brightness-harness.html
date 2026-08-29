@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lamp brightness runtime and editor validation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --primary-color: #42a5f5;
+      --primary-text-color: #f5f7fa;
+      --secondary-text-color: #bcc5d2;
+      --divider-color: #566070;
+      --card-background-color: #262b33;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: #15181d; color: var(--primary-text-color); font-family: system-ui, sans-serif; }
+    h1 { margin: 0 0 6px; font-size: 23px; }
+    h2 { margin: 0 0 10px; font-size: 16px; }
+    p { margin: 0; color: var(--secondary-text-color); }
+    .audit { margin: 14px 0 18px; padding: 10px 12px; border: 1px solid #8b6a28; border-radius: 9px; background: #382c15; color: #ffe2a0; font-weight: 750; }
+    .legacyEvidence { margin: -8px 0 18px; color: #a8e6b8; font-size: 13px; font-weight: 750; }
+    .stage { min-width: 0; margin-bottom: 18px; padding: 13px; border: 1px solid #46505e; border-radius: 12px; background: #20252c; overflow: hidden; }
+    .runtimeHost { width: 100%; min-width: 0; }
+    .editors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+    .editorHost { min-width: 0; overflow: hidden; }
+    .editorHost > p { margin: -4px 0 12px; font-size: 13px; }
+    annunciator-grid-card, annunciator-grid-card-editor { display: block; width: 100%; min-width: 0; }
+    ha-form select, ha-form input {
+      width: 100%; min-height: 44px; border: 1px solid #5b6675; border-radius: 7px;
+      padding: 0 10px; background: #2d333c; color: #f5f7fa;
+    }
+    ha-switch input { width: 20px; height: 20px; accent-color: var(--primary-color); }
+    @media (max-width: 1100px) {
+      body { padding: 12px; }
+      .editors { grid-template-columns: minmax(0, 1fr); }
+      .stage { padding: 10px; }
+    }
+  </style>
+  <script>
+    window.browserErrors = [];
+    addEventListener("error", (event) => browserErrors.push(String(event.error?.stack || event.message)));
+    addEventListener("unhandledrejection", (event) => browserErrors.push(String(event.reason?.stack || event.reason)));
+
+    class MockHaSwitch extends HTMLElement {
+      set checked(value) { this._checked = !!value; this._render(); }
+      get checked() { return !!this._checked; }
+      connectedCallback() { this._render(); }
+      _render() {
+        this.textContent = "";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = this.checked;
+        input.addEventListener("change", () => {
+          this._checked = input.checked;
+          this.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        this.append(input);
+      }
+    }
+    class MockHaForm extends HTMLElement {
+      set schema(value) { this._schema = value; this._render(); }
+      get schema() { return this._schema || []; }
+      set data(value) { this._data = value || {}; this._render(); }
+      get data() { return this._data || {}; }
+      connectedCallback() { this._render(); }
+      _render() {
+        this.textContent = "";
+        const entry = this.schema[0];
+        if (!entry) return;
+        if (entry.selector?.select) {
+          const select = document.createElement("select");
+          for (const option of entry.selector.select.options || []) {
+            const element = document.createElement("option");
+            element.value = option.value;
+            element.textContent = option.label;
+            select.append(element);
+          }
+          select.value = String(this.data[entry.name] ?? "");
+          select.addEventListener("change", () => this.dispatchEvent(new CustomEvent("value-changed", {
+            bubbles: true,
+            detail: { value: { [entry.name]: select.value } },
+          })));
+          this.append(select);
+        } else {
+          const input = document.createElement("input");
+          input.value = String(this.data[entry.name] || "");
+          input.placeholder = "Select entity";
+          input.addEventListener("change", () => this.dispatchEvent(new CustomEvent("value-changed", {
+            bubbles: true,
+            detail: { value: { [entry.name]: input.value } },
+          })));
+          this.append(input);
+        }
+      }
+    }
+    class MockHaSelector extends HTMLElement {}
+    customElements.define("ha-switch", MockHaSwitch);
+    customElements.define("ha-form", MockHaForm);
+    customElements.define("ha-selector", MockHaSelector);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=checkpoint30-editor-inputs"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <h1>State-based lamp brightness</h1>
+  <p>Mounted runtime precedence and the actual visual editor are exercised at desktop and narrow widths.</p>
+  <p id="audit" class="audit">Running browser audit…</p>
+  <p id="legacyEvidence" class="legacyEvidence">Checking legacy Dim/29 compatibility…</p>
+
+  <section class="stage runtimeHost">
+    <h2>Runtime · OFF / ON / ALERT / INOP / spacer / pair / Lamp Test</h2>
+    <annunciator-grid-card id="runtimeCard"></annunciator-grid-card>
+  </section>
+
+  <div class="editors">
+    <section class="stage editorHost" id="panelEditorHost">
+      <h2>Panel setting</h2>
+      <p>Custom OFF, ON, and alert percentages with a non-mutating preview.</p>
+      <annunciator-grid-card-editor id="panelEditor"></annunciator-grid-card-editor>
+    </section>
+    <section class="stage editorHost" id="lampEditorHost">
+      <h2>Per-lamp override</h2>
+      <p>Quick Setup dim controls plus a local Custom profile inside Lens &amp; light.</p>
+      <annunciator-grid-card-editor id="lampEditor"></annunciator-grid-card-editor>
+    </section>
+  </div>
+  <annunciator-grid-card-editor id="legacyEditor" hidden></annunciator-grid-card-editor>
+
+  <script type="module">
+    const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+    const runId = new URLSearchParams(location.search).get("run") || Date.now().toString(36);
+    const panelId = `brightness_browser_${runId.replace(/[^a-z0-9_-]/gi, "_")}`;
+    const serviceCalls = [];
+    const states = {
+      "binary_sensor.off": { state: "off", attributes: { friendly_name: "Ordinary off" } },
+      "binary_sensor.on": { state: "on", attributes: { friendly_name: "Ordinary on" } },
+      "binary_sensor.alarm": { state: "on", attributes: { friendly_name: "Retro alarm" } },
+      "binary_sensor.inop": { state: "unavailable", attributes: { friendly_name: "Unavailable" } },
+      "binary_sensor.pair_top": { state: "off", attributes: { friendly_name: "Pair off" } },
+      "binary_sensor.pair_bottom": { state: "on", attributes: { friendly_name: "Pair on" } },
+      "binary_sensor.tested": { state: "off", attributes: { friendly_name: "Test target" } },
+      "input_boolean.lamp_test": { state: "off", attributes: { friendly_name: "Lamp test" } },
+    };
+    const makeHass = (nextStates = states) => ({
+      states: nextStates,
+      language: "en",
+      callService: async (...args) => serviceCalls.push(args),
+    });
+    const disabledControls = {
+      acknowledge: { enabled: false, label: "ACKNOWLEDGE" },
+      silence: { enabled: false, label: "SILENCE" },
+      reset: { enabled: false, label: "RESET" },
+      lamp_test: { enabled: false, label: "LAMP TEST" },
+      clear_acknowledged: { enabled: false, label: "CLEAR ACKNOWLEDGED" },
+    };
+    const runtimeConfig = {
+      type: "custom:annunciator-grid-card",
+      config_version: 3,
+      panel_id: panelId,
+      title: "BRIGHTNESS VALIDATION",
+      columns: 4,
+      rows: 2,
+      row_mode: "auto",
+      panel_sizing: "auto_fit",
+      cell_width: 165,
+      cell_height: 122,
+      outer_frame: 5,
+      mullion: 5,
+      default_lamp_style: "modern",
+      default_lens_type: "plastic",
+      flicker: true,
+      retro_warmup: false,
+      lamp_test_entity: "input_boolean.lamp_test",
+      lamp_test_mode: "full",
+      lamp_brightness: { profile: "custom", dim_level: 32, off: 20, on: 60, alert: 78 },
+      header_controls: disabledControls,
+      header_tallies: {},
+      entities: [
+        { uid: "off", ack_slot: 1, entity: "binary_sensor.off", primary_mode: "custom", primary_text: "OFF 20%", secondary_mode: "none", lamp_type: "status", alert_style: "none" },
+        { uid: "on", ack_slot: 2, entity: "binary_sensor.on", primary_mode: "custom", primary_text: "ON 60%", secondary_mode: "none", lamp_type: "status", alert_style: "none" },
+        { uid: "alarm", ack_slot: 3, entity: "binary_sensor.alarm", primary_mode: "custom", primary_text: "ALERT 78%", secondary_mode: "custom", secondary_text: "RETRO PULSE", lamp_type: "alarm", severity: "alarm", alert_when: "on", alert_style: "pulse", lamp_style: "retro", lens_type: "frosted", translucent_illumination: true, participates_in_alarm_output: false },
+        { uid: "inop", ack_slot: 4, entity: "binary_sensor.inop", primary_mode: "custom", primary_text: "INOP", secondary_mode: "none", lamp_type: "status" },
+        { uid: "spacer", ack_slot: 5, entity: "", cell_type: "spacer", spacer_appearance: { mode: "blend" } },
+        { uid: "pair-top", ack_slot: 6, entity: "binary_sensor.pair_top", pair_id: "brightness-pair", pair_mode: "top", pair_orientation: "vertical", primary_mode: "custom", primary_text: "PAIR OFF 24%", secondary_mode: "none", lamp_brightness: { profile: "dim_off", dim_level: 24 } },
+        { uid: "pair-bottom", ack_slot: 7, entity: "binary_sensor.pair_bottom", pair_id: "brightness-pair", pair_mode: "bottom", pair_orientation: "vertical", primary_mode: "custom", primary_text: "PAIR ON 43%", secondary_mode: "none", lamp_brightness: { profile: "dim_on", dim_level: 43 } },
+        { uid: "tested", ack_slot: 8, entity: "binary_sensor.tested", primary_mode: "custom", primary_text: "TEST OFF 27%", secondary_mode: "none", lamp_brightness: { profile: "dim_off", dim_level: 27 } },
+      ],
+    };
+
+    const runtimeCard = document.getElementById("runtimeCard");
+    runtimeCard.setConfig(runtimeConfig);
+    runtimeCard.hass = makeHass();
+    await runtimeCard._runtimeRenderQueue;
+    await runtimeCard._renderDynamic();
+
+    const editorConfig = {
+      ...runtimeConfig,
+      panel_id: `${panelId}_editor`,
+      columns: 2,
+      rows: 1,
+      lamp_brightness: { profile: "custom", dim_level: 32, off: 20, on: 60, alert: 78 },
+      entities: [
+        { uid: "editor-a", ack_slot: 1, entity: "binary_sensor.off", name_override: "Editor lamp", lamp_type: "status", lamp_brightness: { profile: "inherit" } },
+        { uid: "editor-b", ack_slot: 2, entity: "binary_sensor.on", name_override: "Second lamp", lamp_type: "status", lamp_brightness: { profile: "inherit" } },
+      ],
+    };
+    const panelEditor = document.getElementById("panelEditor");
+    const lampEditor = document.getElementById("lampEditor");
+    let panelConfigEvents = 0;
+    let lampConfigEvents = 0;
+    panelEditor.addEventListener("config-changed", () => panelConfigEvents++);
+    lampEditor.addEventListener("config-changed", () => lampConfigEvents++);
+    panelEditor.hass = makeHass();
+    lampEditor.hass = makeHass();
+    panelEditor.setConfig(editorConfig);
+    lampEditor.setConfig(editorConfig);
+    panelEditor._panelPage = "appearance";
+    panelEditor._renderPanel();
+    panelEditor.shadowRoot.getElementById("panelSettings").open = true;
+    lampEditor._selectedLamp = 0;
+    lampEditor._editorMode = "basic";
+    lampEditor._page = "basic";
+    lampEditor._renderEditor();
+    await sleep(0);
+
+    const failures = [];
+    const field = (root, label) => [...root.querySelectorAll(".field")].find((entry) => entry.querySelector(":scope > .label")?.textContent === label);
+    const selectValues = (form) => form?.schema?.[0]?.selector?.select?.options?.map((option) => option.value) || [];
+    const selectLabels = (form) => form?.schema?.[0]?.selector?.select?.options?.map((option) => option.label) || [];
+    const choose = (form, value) => form?.dispatchEvent(new CustomEvent("value-changed", { bubbles: true, detail: { value: { v: value } } }));
+    const editNumber = (input, value) => {
+      if (!input) return;
+      input.value = String(value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const cellAt = (index) => runtimeCard.shadowRoot.querySelector(`#grid > .cell[data-original-index="${index}"]`);
+    const percent = (cell) => Number(cell?.dataset?.brightnessPercent);
+
+    // Runtime OFF / ON / active alarm levels.
+    const offCell = cellAt(0);
+    const onCell = cellAt(1);
+    const alarmCell = cellAt(2);
+    const inopCell = cellAt(3);
+    const spacerCell = runtimeCard.shadowRoot.querySelector(".cell.spacer");
+    if (offCell?.dataset.brightnessState !== "off" || percent(offCell) !== 20 || offCell.style.getPropertyValue("--annun-lamp-brightness") !== "0.20") failures.push("runtime-off");
+    if (onCell?.dataset.brightnessState !== "on" || percent(onCell) !== 60 || onCell.style.getPropertyValue("--annun-lamp-brightness") !== "0.60") failures.push("runtime-on");
+    if (alarmCell?.dataset.brightnessState !== "alert" || percent(alarmCell) !== 78 || alarmCell.style.getPropertyValue("--annun-lamp-brightness") !== "0.78") failures.push("runtime-alert");
+
+    // Custom alert brightness must coexist with Retro/translucent material and own the alert animation.
+    const alarmWindow = alarmCell?.querySelector(".window");
+    const alertAnimation = alarmWindow ? getComputedStyle(alarmWindow).animationName.toLowerCase() : "";
+    const competingFlicker = alarmWindow ? getComputedStyle(alarmWindow, "::before").animationName : "";
+    if (!["retro", "lens-frosted", "translucent-illumination", "pulse", "brightness-dim"].every((name) => alarmCell?.classList.contains(name))) failures.push("retro-alert-classes");
+    if (!alertAnimation.includes("retrotranspulse") || competingFlicker.includes("incFlicker")) failures.push(`retro-alert-animation:${alertAnimation}/${competingFlicker}`);
+    if (alarmWindow && Math.abs(Number(getComputedStyle(alarmWindow).opacity) - 0.78) > 0.02) failures.push(`retro-alert-opacity:${getComputedStyle(alarmWindow).opacity}`);
+
+    // INOP and spacers must remain unattenuated and free of stale brightness data.
+    if (!inopCell?.classList.contains("unavailable") || inopCell.classList.contains("brightness-dim") || inopCell.style.getPropertyValue("--annun-lamp-brightness")) failures.push("inop-full");
+    if (!spacerCell || spacerCell.classList.contains("brightness-dim") || spacerCell.dataset.brightnessState || spacerCell.style.getPropertyValue("--annun-lamp-brightness")) failures.push("spacer-full");
+
+    // Paired halves keep independent levels inside one physical panel cell.
+    const pairCell = runtimeCard.shadowRoot.querySelector(".cell.paired");
+    const topHalf = pairCell?.querySelector('.pairHalf[data-half="top"]');
+    const bottomHalf = pairCell?.querySelector('.pairHalf[data-half="bottom"]');
+    if (!pairCell || topHalf?.dataset.brightnessState !== "off" || percent(topHalf) !== 24 || bottomHalf?.dataset.brightnessState !== "on" || percent(bottomHalf) !== 43) failures.push("paired-levels");
+
+    // A blocked pass must use its captured Lamp Test state, then the next pass must use the newer state.
+    const snapshotOff = makeHass({ ...states, "input_boolean.lamp_test": { state: "off", attributes: {} } });
+    const snapshotOn = makeHass({ ...states, "input_boolean.lamp_test": { state: "on", attributes: {} } });
+    const originalGetAckMap = runtimeCard._getAckMap.bind(runtimeCard);
+    let releaseSnapshot;
+    runtimeCard._getAckMap = () => new Promise((resolve) => { releaseSnapshot = resolve; });
+    runtimeCard._hass = snapshotOff;
+    const capturedPass = runtimeCard._renderDynamic();
+    for (let attempt = 0; attempt < 60 && !releaseSnapshot; attempt++) await sleep(1);
+    if (typeof releaseSnapshot !== "function") failures.push("lamp-test-race-not-blocked");
+    else {
+      runtimeCard._hass = snapshotOn;
+      releaseSnapshot({});
+      await capturedPass;
+      const testedCell = cellAt(7);
+      if (testedCell?.dataset.brightnessState !== "off" || percent(testedCell) !== 27) failures.push("lamp-test-captured-off");
+    }
+    runtimeCard._getAckMap = originalGetAckMap;
+    runtimeCard._hass = snapshotOn;
+    await runtimeCard._renderDynamic();
+    if (cellAt(7)?.dataset.brightnessState !== "test" || percent(cellAt(7)) !== 100) failures.push("lamp-test-new-on");
+    runtimeCard._hass = makeHass();
+    await runtimeCard._renderDynamic();
+
+    // Preview generation is passive before any intentional editor change.
+    let panelBody = panelEditor.shadowRoot.getElementById("panelBody");
+    let lampBody = lampEditor.shadowRoot.getElementById("editor");
+    const statesBeforePreview = JSON.stringify(states);
+    const panelEventsBeforePreview = panelConfigEvents;
+    const lampEventsBeforePreview = lampConfigEvents;
+    panelEditor._renderPanel();
+    lampEditor._renderEditor();
+    panelBody = panelEditor.shadowRoot.getElementById("panelBody");
+    lampBody = lampEditor.shadowRoot.getElementById("editor");
+    const previews = [...panelBody.querySelectorAll(".brightnessPreview"), ...lampBody.querySelectorAll(".brightnessPreview")];
+    if (previews.length !== 2 || previews.some((preview) => preview.querySelector("input,button,select,ha-form,ha-switch"))) failures.push("preview-interactive");
+    if (serviceCalls.length || JSON.stringify(states) !== statesBeforePreview || panelConfigEvents !== panelEventsBeforePreview || lampConfigEvents !== lampEventsBeforePreview) failures.push("preview-mutated-state");
+
+    // A malformed canonical object must not mask valid v1.0.x aliases in the editor.
+    const legacyEditor = document.getElementById("legacyEditor");
+    legacyEditor.hass = makeHass();
+    const legacyConfig = { ...editorConfig, panel_id: `${panelId}_legacy`, inactive_lamp_default: "dim", inactive_lamp_brightness: 29, lamp_brightness: { profile: "malformed", dim_level: false } };
+    legacyEditor.setConfig(legacyConfig);
+    legacyEditor._panelPage = "appearance";
+    legacyEditor._renderPanel();
+    const legacyBody = legacyEditor.shadowRoot.getElementById("panelBody");
+    const legacyProfile = legacyEditor._config.lamp_brightness;
+    const legacyProfileForm = field(legacyBody, "Brightness profile")?.querySelector("ha-form");
+    const legacyDimInput = field(legacyBody, "Dim level")?.querySelector('input[type="number"]');
+    if (legacyProfile?.profile !== "dim_off" || legacyProfile?.dim_level !== 29 || legacyProfile?.off !== 29 || legacyProfile?.on !== 100 || legacyProfile?.alert !== 100 || legacyProfileForm?.data?.v !== "dim_off" || Number(legacyDimInput?.value) !== 29) failures.push(`legacy-dim-29:${JSON.stringify(legacyProfile)}`);
+    document.getElementById("legacyEvidence").textContent = `Legacy alias check · ${legacyProfile?.profile === "dim_off" ? "Dim when OFF" : legacyProfile?.profile || "missing"} · ${legacyProfile?.dim_level ?? "?"}%`;
+
+    // Panel profiles expose only the fields relevant to the chosen profile, and Undo restores the prior object.
+    let panelSelect = field(panelBody, "Brightness profile")?.querySelector("ha-form");
+    if (JSON.stringify(selectValues(panelSelect)) !== JSON.stringify(["normal", "dim_off", "dim_on", "dim_non_alert", "dim_all", "custom"])) failures.push("panel-profile-options");
+    if (!["OFF brightness", "ON brightness", "Alert brightness"].every((label) => field(panelBody, label))) failures.push("panel-custom-fields");
+    if (!panelBody.textContent.includes("OFF · ON · ALERT preview") || !["OFF 20%", "ON 60%", "ALERT 78%"].every((label) => panelBody.textContent.includes(label))) failures.push("panel-preview-labels");
+    choose(panelSelect, "normal");
+    panelBody = panelEditor.shadowRoot.getElementById("panelBody");
+    if (field(panelBody, "Dim level") || field(panelBody, "OFF brightness") || !field(panelBody, "OFF · ON · ALERT preview")) failures.push("normal-dependent-fields");
+    panelEditor.shadowRoot.getElementById("undoBtn").click();
+    panelBody = panelEditor.shadowRoot.getElementById("panelBody");
+
+    // Sequential native edits share one live draft: a later field cannot restore
+    // an earlier field's render-time value, and the passive preview follows each edit.
+    editNumber(field(panelBody, "OFF brightness")?.querySelector('input[type="number"]'), 25);
+    if (panelEditor._config.lamp_brightness.off !== 25 || !panelBody.textContent.includes("OFF 25%")) failures.push("panel-live-off");
+    editNumber(field(panelBody, "ON brightness")?.querySelector('input[type="number"]'), 70);
+    if (panelEditor._config.lamp_brightness.off !== 25 || panelEditor._config.lamp_brightness.on !== 70 || !panelBody.textContent.includes("OFF 25%") || !panelBody.textContent.includes("ON 70%")) failures.push("panel-sequential-on");
+    editNumber(field(panelBody, "Alert brightness")?.querySelector('input[type="number"]'), 82);
+    if (JSON.stringify([panelEditor._config.lamp_brightness.off,panelEditor._config.lamp_brightness.on,panelEditor._config.lamp_brightness.alert]) !== JSON.stringify([25,70,82]) || !panelBody.textContent.includes("ALERT 82%")) failures.push("panel-sequential-alert");
+    if (panelEditor._config.lamp_brightness.profile !== "custom" || !field(panelBody, "OFF brightness")) failures.push("panel-profile-undo");
+    panelSelect = field(panelBody, "Brightness profile")?.querySelector("ha-form");
+    choose(panelSelect, "dim_all");
+    panelBody = panelEditor.shadowRoot.getElementById("panelBody");
+    if (!field(panelBody, "Dim level") || field(panelBody, "OFF brightness")) failures.push("dim-dependent-fields");
+    panelEditor.shadowRoot.getElementById("undoBtn").click();
+    panelBody = panelEditor.shadowRoot.getElementById("panelBody");
+
+    // Per-lamp profile starts with concise Panel default, supports Custom, and is undoable.
+    let lampSelect = field(lampBody, "Brightness")?.querySelector("ha-form");
+    const lampLabels = selectLabels(lampSelect);
+    if (lampLabels[0] !== "Panel default" || lampLabels.some((label) => /v1\.0\.2|Panel default\s*\(/i.test(label))) failures.push(`panel-default-label:${lampLabels[0] || "missing"}`);
+    choose(lampSelect, "dim_on");
+    lampBody = lampEditor.shadowRoot.getElementById("editor");
+    if (lampEditor._config.entities[0].lamp_brightness.profile !== "dim_on" || !field(lampBody, "Dim level") || field(lampBody, "OFF brightness") || !field(lampBody, "OFF · ON · ALERT preview")) failures.push("quick-lamp-dim-fields-preview");
+    lampEditor.shadowRoot.getElementById("undoBtn").click();
+    if (lampEditor._config.entities[0].lamp_brightness.profile !== "inherit") failures.push("lamp-profile-undo");
+    lampEditor._editorMode = "advanced";
+    lampEditor._page = "appearance";
+    lampEditor._renderEditor();
+    lampBody = lampEditor.shadowRoot.getElementById("editor");
+    lampSelect = field(lampBody, "Brightness")?.querySelector("ha-form");
+    choose(lampSelect, "custom");
+    lampBody = lampEditor.shadowRoot.getElementById("editor");
+    if (!lampBody.textContent.includes("Lens & light") || !["OFF brightness", "ON brightness", "Alert brightness"].every((label) => field(lampBody, label))) failures.push("lamp-custom-fields");
+    editNumber(field(lampBody, "OFF brightness")?.querySelector('input[type="number"]'), 31);
+    editNumber(field(lampBody, "ON brightness")?.querySelector('input[type="number"]'), 69);
+    editNumber(field(lampBody, "Alert brightness")?.querySelector('input[type="number"]'), 93);
+    const editedLampBrightness = lampEditor._config.entities[0].lamp_brightness;
+    if (JSON.stringify([editedLampBrightness.off,editedLampBrightness.on,editedLampBrightness.alert]) !== JSON.stringify([31,69,93]) || !["OFF 31%","ON 69%","ALERT 93%"].every((label)=>lampBody.textContent.includes(label))) failures.push("lamp-sequential-preview");
+
+    // Dragging a native color palette must update the final draft without flooding
+    // the Home Assistant preview with one full configuration event per mouse sample.
+    const colorEditor = document.createElement("annunciator-grid-card-editor");
+    colorEditor.hidden = true;
+    document.body.append(colorEditor);
+    colorEditor.hass = makeHass();
+    colorEditor.setConfig({ ...editorConfig, panel_id: `${panelId}_color_drag` });
+    let colorConfigEvents = 0;
+    colorEditor.addEventListener("config-changed", () => colorConfigEvents++);
+    const colorRow = colorEditor._color("Drag performance", "#000000", (value) => colorEditor._setNested("severity_colors", "on", value));
+    colorEditor.shadowRoot.getElementById("editor").append(colorRow);
+    const colorPicker = colorRow.querySelector('input[type="color"]');
+    colorPicker.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    for (let index = 1; index <= 80; index++) {
+      colorPicker.value = `#${index.toString(16).padStart(6, "0")}`;
+      colorPicker.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    colorPicker.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(20);
+    if (colorEditor._config.severity_colors.on !== "#000050" || colorConfigEvents < 1 || colorConfigEvents > 3 || colorEditor._nativeEditDepth !== 0) failures.push(`color-drag-coalescing:${colorEditor._config.severity_colors.on}/${colorConfigEvents}/${colorEditor._nativeEditDepth}`);
+
+    await sleep(250);
+    const shells = [panelEditor, lampEditor].map((editor) => editor.shadowRoot?.querySelector(".shell")).filter(Boolean);
+    for (const [index, shell] of shells.entries()) if (shell.scrollWidth > shell.clientWidth + 2) failures.push(`editor-overflow-${index}:${shell.scrollWidth}/${shell.clientWidth}`);
+    if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 2) failures.push(`page-overflow:${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`);
+    const runtimeBounds = runtimeCard.getBoundingClientRect();
+    const runtimeHostBounds = document.querySelector(".runtimeHost").getBoundingClientRect();
+    if (runtimeBounds.right > runtimeHostBounds.right + 2) failures.push(`runtime-overflow:${runtimeBounds.right}/${runtimeHostBounds.right}`);
+    if (browserErrors.length) failures.push(`browser-errors:${browserErrors.length}`);
+
+    window.brightnessBrowserValidation = {
+      failures,
+      browserErrors,
+      serviceCalls: serviceCalls.length,
+      runtime: {
+        off: [cellAt(0)?.dataset.brightnessState, percent(cellAt(0))],
+        on: [cellAt(1)?.dataset.brightnessState, percent(cellAt(1))],
+        alert: [cellAt(2)?.dataset.brightnessState, percent(cellAt(2))],
+        pair: [percent(topHalf), percent(bottomHalf)],
+      },
+      editor: {
+        panelProfile: panelEditor._config.lamp_brightness.profile,
+        lampProfile: lampEditor._config.entities[0].lamp_brightness.profile,
+        previewCount: previews.length,
+        panelConfigEvents,
+        lampConfigEvents,
+        colorConfigEvents,
+      },
+    };
+    const audit = document.getElementById("audit");
+    audit.textContent = failures.length
+      ? `Browser audit failed: ${failures.join(" · ")}`
+      : "Browser audit passed: OFF/ON/ALERT levels · Retro effect ownership · pair halves · spacer/INOP · captured Lamp Test · panel/per-lamp controls · passive preview · Undo · responsive layout · no browser errors";
+    audit.style.borderColor = failures.length ? "#a54d5b" : "#3d7c52";
+    audit.style.background = failures.length ? "#3c1d23" : "#173222";
+    audit.style.color = failures.length ? "#ffd0d5" : "#a8e6b8";
+    document.body.dataset.status = failures.length ? "fail" : "pass";
+    document.body.dataset.ready = "true";
+  </script>
+</body>
+</html>

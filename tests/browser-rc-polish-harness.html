@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Release-candidate editor polish validation</title>
+  <style>
+    :root{color-scheme:dark;--primary-color:#42a5f5;--primary-text-color:#f5f7fa;--secondary-text-color:#b7c0ce;--divider-color:#566070;--card-background-color:#262b33}
+    *{box-sizing:border-box}body{margin:0;padding:18px;background:#15181d;color:var(--primary-text-color);font-family:system-ui,sans-serif}.host{max-width:980px;margin:0 auto}.mobile .host{max-width:430px}h1{margin:0 0 6px;font-size:22px}.intro{margin:0 0 12px;color:var(--secondary-text-color)}.audit{padding:9px 11px;border:1px solid #8b6a28;border-radius:8px;background:#382c15;color:#ffe2a0;font-weight:700}.stage{min-width:0;margin-top:14px;padding:12px;border:1px solid #46505e;border-radius:10px;background:#20252c;overflow:hidden}annunciator-grid-card,annunciator-grid-card-editor{display:block;width:100%;min-width:0}ha-form select,ha-form input{width:100%;min-height:44px;border:1px solid #5b6675;border-radius:6px;padding:0 9px;background:#2d333c;color:#f5f7fa}ha-switch input{width:20px;height:20px}
+  </style>
+  <script>
+    window.browserErrors=[];addEventListener("error",event=>browserErrors.push(String(event.error?.stack||event.message)));addEventListener("unhandledrejection",event=>browserErrors.push(String(event.reason?.stack||event.reason)));
+    class MockHaSwitch extends HTMLElement{set checked(value){this._checked=!!value;this._render()}get checked(){return!!this._checked}connectedCallback(){this._render()}_render(){this.textContent="";const input=document.createElement("input");input.type="checkbox";input.checked=this.checked;input.onchange=()=>{this._checked=input.checked;this.dispatchEvent(new Event("change",{bubbles:true}))};this.append(input)}}
+    class MockHaForm extends HTMLElement{set schema(value){this._schema=value;this._render()}get schema(){return this._schema||[]}set data(value){this._data=value||{};this._render()}get data(){return this._data||{}}connectedCallback(){this._render()}_render(){this.textContent="";const entry=this.schema[0];if(!entry)return;if(entry.selector?.select){const select=document.createElement("select");for(const option of entry.selector.select.options||[]){const item=document.createElement("option");item.value=option.value;item.textContent=option.label;select.append(item)}select.value=String(this.data[entry.name]??"");select.onchange=()=>this.dispatchEvent(new CustomEvent("value-changed",{bubbles:true,detail:{value:{[entry.name]:select.value}}}));this.append(select)}else{const input=document.createElement("input");input.value=String(this.data[entry.name]||"");this.append(input)}}}
+    customElements.define("ha-switch",MockHaSwitch);customElements.define("ha-form",MockHaForm);
+  </script>
+  <script src="../dist/annunciator-grid-card.js?v=checkpoint28-rc-polish"></script>
+</head>
+<body data-ready="false" data-status="running">
+  <script>if(new URLSearchParams(location.search).get("mobile")==="1")document.body.classList.add("mobile")</script>
+  <main class="host">
+    <h1>Release-candidate editor polish</h1>
+    <p class="intro">Navigator badges, page summaries, display copy isolation, contrast warnings, inheritance resets, split-pill pairs, and responsive layout.</p>
+    <p id="audit" class="audit">Running browser audit…</p>
+    <section class="stage"><annunciator-grid-card id="card"></annunciator-grid-card></section>
+    <section class="stage"><annunciator-grid-card-editor id="editor"></annunciator-grid-card-editor></section>
+  </main>
+  <script>
+    const states={"binary_sensor.target":{state:"off",attributes:{friendly_name:"Target"}},"binary_sensor.source":{state:"on",attributes:{friendly_name:"Source"}}},hass={states,callService:async()=>{},language:"en"};
+    const config={type:"custom:annunciator-grid-card",config_version:3,panel_id:"rc-browser",columns:2,rows:2,panel_sizing:"auto_fit",lamp_test_mode:"steady",ack_rearm_default:"auto",spacer_appearance:{},next_ack_slot:3,severity_colors:{on_enabled:true,on:"#888888",on_text_enabled:true,on_text:"#777777"},header_appearance:{background_enabled:true,background:"#888888",title_color_enabled:true,title_color:"#777777"},entities:[
+      {uid:"target",ack_slot:1,entity:"binary_sensor.target",name_override:"Target",severity:"alarm",alert_style:"blink",ack_rearm:"manual",pair_id:"pair",pair_mode:"top",pair_orientation:"horizontal",pair_shape_mode:"split_pill",column_span:2,content_mode:"icon_text",icon_color_mode:"single",icon_color:"#777777",font_family:"custom",font_custom:"monospace",shape:"circle",lamp_style:"retro",lens_type:"glass",lamp_brightness:{profile:"custom",off:20,on:60,alert:90},color_behavior:"custom",colors:{on:"#888888",on_text:"#777777"}},
+      {uid:"source",ack_slot:2,entity:"binary_sensor.source",name_override:"Source",pair_id:"pair",pair_mode:"bottom",pair_orientation:"horizontal",pair_shape_mode:"split_pill",participates_in_alarm_output:true,primary_mode:"dynamic",secondary_mode:"state_labels",dynamic_text:{primary:{rules:[{kind:"acknowledged",text:"ACK"}]}}}
+    ]};
+    const card=document.getElementById("card"),editor=document.getElementById("editor");card.setConfig(config);card.hass=hass;editor.hass=hass;editor.setConfig(config);editor._selectedLamp=0;editor._editorMode="advanced";editor._page="display";editor._renderList();editor._renderEditor();const failures=[];
+    setTimeout(async()=>{
+      await card._runtimeRenderQueue;await card._renderDynamic();const splitCell=card.shadowRoot.querySelector("#grid>.cell");if(!splitCell?.classList.contains("pair-split-pill")||!splitCell.classList.contains("pair-horizontal")||splitCell.querySelectorAll(".pairHalf.shape-pill").length!==2)failures.push("horizontal-split-pill");
+      let body=editor.shadowRoot.getElementById("editor"),list=editor.shadowRoot.getElementById("lampList"),field=label=>[...body.querySelectorAll(".field")].find(entry=>entry.querySelector(":scope>.label")?.textContent===label);
+      for(const badge of ["Paired","Span","Dynamic","Audible","Override"])if(!list.textContent.includes(badge))failures.push(`badge-${badge}`);
+      if(!body.querySelector(".pageSummary")?.textContent.includes("Current display:"))failures.push("display-summary");
+      if(!body.textContent.includes("Copy display settings")||!field("Source lamp")||![...body.querySelectorAll("button")].some(button=>button.textContent==="Copy to this lamp"))failures.push("display-copy-controls");
+      editor._selectedLamp=1;editor._page="display";editor._renderEditor();body=editor.shadowRoot.getElementById("editor");field=label=>[...body.querySelectorAll(".field")].find(entry=>entry.querySelector(":scope>.label")?.textContent===label);const conditionLabels=field("When")?.querySelector("select")?.textContent||"";for(const label of ["ACK stored","No ACK stored","Main alert active","Main alert inactive"])if(!conditionLabels.includes(label))failures.push(`condition-${label}`);
+      editor._selectedLamp=0;editor._page="behavior";editor._renderEditor();body=editor.shadowRoot.getElementById("editor");field=label=>[...body.querySelectorAll(".field")].find(entry=>entry.querySelector(":scope>.label")?.textContent===label);if(!body.querySelector(".pageSummary")?.textContent.includes("Current behavior:"))failures.push("behavior-summary");if(!field("ACK rearm")?.querySelector(".controlWithReset button"))failures.push("ack-reset");
+      editor._page="appearance";editor._renderEditor();body=editor.shadowRoot.getElementById("editor");field=label=>[...body.querySelectorAll(".field")].find(entry=>entry.querySelector(":scope>.label")?.textContent===label);if(!body.querySelector(".contrastWarning")?.textContent.includes("ON text"))failures.push("lamp-contrast");for(const label of ["Lamp shape","Lamp style","Lens material","Brightness"])if(!field(label)?.querySelector(".controlWithReset button"))failures.push(`reset-${label}`);
+      editor._panelPage="appearance";editor._renderPanel();if(!editor.shadowRoot.querySelector("#panelBody .contrastWarning")?.textContent.includes("Header title"))failures.push("panel-contrast");
+      const shell=editor.shadowRoot.querySelector(".shell"),panel=editor.shadowRoot.querySelector("#panelBody");if(shell.scrollWidth>shell.clientWidth+1||body.scrollWidth>body.clientWidth+1||panel.scrollWidth>panel.clientWidth+1)failures.push(`overflow:${shell.clientWidth}/${shell.scrollWidth}:${body.clientWidth}/${body.scrollWidth}:${panel.clientWidth}/${panel.scrollWidth}`);if(browserErrors.length)failures.push(`browser-errors:${browserErrors.length}`);
+      window.rcPolishValidation={failures,errors:browserErrors,widths:{shell:[shell.clientWidth,shell.scrollWidth],body:[body.clientWidth,body.scrollWidth],panel:[panel.clientWidth,panel.scrollWidth]}};const audit=document.getElementById("audit");audit.textContent=failures.length?`Browser audit failed: ${failures.join(" · ")}`:"Browser audit passed: split pill · badges · summaries · copy controls · clarified labels · contrast warnings · inheritance resets · responsive overflow · no browser errors";document.body.dataset.status=failures.length?"fail":"pass";document.body.dataset.ready="true";
+    },260);
+  </script>
+</body>
+</html>

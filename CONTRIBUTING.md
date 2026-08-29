@@ -18,7 +18,8 @@ Contributions, bug reports, documentation fixes, and focused feature proposals a
 4. Run:
 
    ```bash
-   npm test
+   pnpm install --frozen-lockfile
+   pnpm test
    ```
 
 5. Ensure the HACS validation workflow passes.
