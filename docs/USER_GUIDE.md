@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](../images/annunciator-grid-card-logo.png)
+
 # Annunciator Grid Card v1.1.0 — Complete User Guide
 
 ## v1.1.0 features

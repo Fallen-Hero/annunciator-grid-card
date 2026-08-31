@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](../images/annunciator-grid-card-logo.png)
+
 # Annunciator Grid Card v1.1.0 — Troubleshooting
 
 Use this page for common installation, rendering, color, ACK, rule, interaction, and editor problems. For configuration details, see [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md). For feature explanations, see [USER_GUIDE.md](USER_GUIDE.md).

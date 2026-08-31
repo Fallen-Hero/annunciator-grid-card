@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](images/annunciator-grid-card-logo.png)
+
 # Contributing
 
 Contributions, bug reports, documentation fixes, and focused feature proposals are welcome.

@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](images/annunciator-grid-card-logo.png)
+
 # Security Policy
 
 Annunciator Grid Card is client-side Home Assistant dashboard JavaScript. It does not provide an independent authentication, authorization, safety, or security boundary.

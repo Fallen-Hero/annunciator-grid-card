@@ -1,4 +1,12 @@
+![Annunciator Grid Card — Alarm, Status, Control](images/annunciator-grid-card-logo.png)
+
 # Changelog
+
+## [Unreleased]
+
+- Added the Annunciator Grid Card visual identity, including compact icon, labeled annunciator logo, GitHub/social banner, documented brand palette, and the **ALARM · STATUS · CONTROL** brand line.
+- Applied the branded presentation consistently across the README, current release notes, contributor guidance, security policy, and v1.1.0 documentation.
+- Added automated checks for required brand assets, exact PNG dimensions, accessible SVG metadata, and documentation references.
 
 ## [1.1.0] - 2026-08-29
 

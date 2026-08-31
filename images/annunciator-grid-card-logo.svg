@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Annunciator Grid Card logo</title>
+  <desc id="desc">A labeled red, white, and green annunciator lamp panel beside the Annunciator Grid Card wordmark and the line Alarm, Status, Control.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#171b20"/><stop offset="1" stop-color="#080a0c"/></linearGradient>
+    <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#4a5057"/><stop offset="0.48" stop-color="#1b2025"/><stop offset="1" stop-color="#07090b"/></linearGradient>
+    <radialGradient id="red" cx="43%" cy="35%" r="76%"><stop stop-color="#ff7b77"/><stop offset="0.34" stop-color="#ef4144"/><stop offset="0.78" stop-color="#c8222a"/><stop offset="1" stop-color="#7f0f15"/></radialGradient>
+    <radialGradient id="white" cx="43%" cy="35%" r="76%"><stop stop-color="#fff"/><stop offset="0.4" stop-color="#f1f3f5"/><stop offset="0.8" stop-color="#bcc3ca"/><stop offset="1" stop-color="#7d8790"/></radialGradient>
+    <radialGradient id="green" cx="43%" cy="35%" r="76%"><stop stop-color="#bdffa1"/><stop offset="0.34" stop-color="#78dc5b"/><stop offset="0.77" stop-color="#48a039"/><stop offset="1" stop-color="#236124"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.72"/></filter>
+  </defs>
+  <rect width="1200" height="360" rx="30" fill="url(#panel)" stroke="#30363d" stroke-width="2"/>
+  <g transform="translate(42 54)" filter="url(#shadow)">
+    <rect width="360" height="252" rx="25" fill="url(#bezel)" stroke="#59616a" stroke-width="3"/>
+    <rect x="13" y="13" width="334" height="226" rx="17" fill="#040507" stroke="#000" stroke-width="4"/>
+    <g stroke="#171b20" stroke-width="8">
+      <rect x="27" y="27" width="94" height="92" rx="12" fill="url(#red)"/>
+      <rect x="133" y="27" width="94" height="92" rx="12" fill="url(#white)"/>
+      <rect x="239" y="27" width="94" height="92" rx="12" fill="url(#red)"/>
+      <rect x="27" y="133" width="94" height="92" rx="12" fill="url(#green)"/>
+      <rect x="133" y="133" width="94" height="92" rx="12" fill="url(#green)"/>
+      <rect x="239" y="133" width="94" height="92" rx="12" fill="url(#white)"/>
+    </g>
+    <g fill="#101418" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="900" text-anchor="middle" letter-spacing="1.05">
+      <text x="74" y="76">ALARM</text><text x="180" y="76">READY</text><text x="286" y="76">TRIP</text>
+      <text x="74" y="182">ACTIVE</text><text x="180" y="182">NORMAL</text><text x="286" y="182">STATUS</text>
+    </g>
+  </g>
+  <g transform="translate(450 112)">
+    <text x="0" y="0" fill="#f5f7f9" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800" letter-spacing="4">ANNUNCIATOR</text>
+    <text x="0" y="72" fill="#78dc5b" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800" letter-spacing="8">GRID CARD</text>
+    <rect x="2" y="102" width="594" height="4" fill="#e63b3f"/><rect x="596" y="102" width="98" height="4" fill="#78dc5b"/>
+    <text x="2" y="151" fill="#b4bcc5" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" letter-spacing="4">ALARM · STATUS · CONTROL</text>
+  </g>
+</svg>

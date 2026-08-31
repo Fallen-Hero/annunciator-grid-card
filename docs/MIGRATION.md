@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](../images/annunciator-grid-card-logo.png)
+
 # Annunciator Grid Card — v1.1.0 Migration and Compatibility
 
 ## Migrating from v1.0.2 to v1.1.0

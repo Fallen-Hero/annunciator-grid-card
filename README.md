@@ -1,4 +1,8 @@
+![Annunciator Grid Card — Alarm, Status, Control](images/annunciator-grid-card-social-preview.png)
+
 # Annunciator Grid Card
+
+**ALARM · STATUS · CONTROL**
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/fallenhero)
 
@@ -7,7 +11,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-Custom%20Card-41BDF5)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A highly configurable industrial-style annunciator panel for Home Assistant. It can be as simple as a green-when-ON / neutral-when-OFF indicator, or as advanced as a multi-severity alarm panel with conditional rules, acknowledgement, paired lamps, groups, change alerts, cross-entity logic, custom interactions, diagnostics, and persistent ACK storage.
+An industrial alarm, status, and control panel card for Home Assistant. It can be as simple as a green-when-ON / neutral-when-OFF indicator, or as advanced as a multi-severity alarm panel with conditional rules, acknowledgement, paired lamps, groups, change alerts, cross-entity logic, custom interactions, diagnostics, and persistent ACK storage.
 
 > **Safety notice:** This is a dashboard/monitoring component. It is not a certified life-safety, fire-alarm, process-safety, protective-relay, emergency-shutdown, or safety-instrumented-system component. Do not use it as the sole means of protecting people, equipment, or property.
 
@@ -298,6 +302,7 @@ As with any dashboard component update, keep a Home Assistant/dashboard backup b
 - [Migration / compatibility](docs/MIGRATION.md)
 - [Validation notes](docs/VALIDATION.md)
 - [v1.1.0 validation record](docs/V1.1.0-VALIDATION-RECORD.md)
+- [Brand assets and usage](docs/BRANDING.md)
 - [Examples](examples/)
 - [Shared historical-tally entity example](examples/shared-historical-tallies.yaml)
 - [Script alarm-output and Silence script example](examples/script-alarm-output.yaml)

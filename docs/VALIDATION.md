@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](../images/annunciator-grid-card-logo.png)
+
 # Annunciator Grid Card v1.1.0 — Validation Notes
 
 The project uses several layers of validation. No automated suite can reproduce every Home Assistant/browser/theme/device combination, so real Home Assistant smoke testing remains part of the release gate.

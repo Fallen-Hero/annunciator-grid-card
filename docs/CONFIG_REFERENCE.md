@@ -1,3 +1,5 @@
+![Annunciator Grid Card — Alarm, Status, Control](../images/annunciator-grid-card-logo.png)
+
 # Annunciator Grid Card v1.1.0 — Configuration Reference
 
 This is the YAML/schema reference for Annunciator Grid Card. The visual editor is recommended for normal use; manual YAML is mainly useful for examples, bulk editing, debugging, and support.
